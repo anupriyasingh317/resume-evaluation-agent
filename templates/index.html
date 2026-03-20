@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Resume Evaluation Agent{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="container text-center">
+        <h1 class="display-4 mb-4">
+            <i class="fas fa-robot me-3"></i>Resume Evaluation Agent
+        </h1>
+        <p class="lead mb-4">
+            AI-powered resume screening and evaluation system. 
+            Upload job descriptions and get instant candidate rankings with detailed insights.
+        </p>
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                    <a href="{{ url_for('manual_requirements') }}" class="btn btn-light btn-lg me-md-2">
+                        <i class="fas fa-edit me-2"></i>Manual Requirements
+                    </a>
+                    <a href="{{ url_for('upload_job_description') }}" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-upload me-2"></i>Upload Job Description
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container my-5">
+    <div class="row">
+        <div class="col-lg-4 mb-4">
+            <div class="card feature-card h-100 shadow">
+                <div class="card-body text-center">
+                    <i class="fas fa-file-upload fa-3x text-primary mb-3"></i>
+                    <h5 class="card-title">Upload Job Descriptions</h5>
+                    <p class="card-text">
+                        Support for PDF, DOCX, and TXT formats. 
+                        AI automatically extracts requirements from your job descriptions.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-4">
+            <div class="card feature-card h-100 shadow">
+                <div class="card-body text-center">
+                    <i class="fas fa-brain fa-3x text-success mb-3"></i>
+                    <h5 class="card-title">AI-Powered Analysis</h5>
+                    <p class="card-text">
+                        Advanced LLM technology for semantic skill matching, 
+                        experience evaluation, and project relevance assessment.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-4">
+            <div class="card feature-card h-100 shadow">
+                <div class="card-body text-center">
+                    <i class="fas fa-chart-ranking fa-3x text-warning mb-3"></i>
+                    <h5 class="card-title">Smart Ranking</h5>
+                    <p class="card-text">
+                        Get ranked candidate lists with detailed reasoning, 
+                        skill gap analysis, and interview recommendations.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-12">
+            <h2 class="text-center mb-4">How It Works</h2>
+        </div>
+        <div class="col-md-4 text-center mb-4">
+            <div class="step-number bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 50px; height: 50px;">
+                <span class="fw-bold">1</span>
+            </div>
+            <h5>Provide Requirements</h5>
+            <p>Either upload a job description file or enter requirements manually</p>
+        </div>
+        <div class="col-md-4 text-center mb-4">
+            <div class="step-number bg-success text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 50px; height: 50px;">
+                <span class="fw-bold">2</span>
+            </div>
+            <h5>AI Analysis</h5>
+            <p>System analyzes all resumes against your requirements using advanced AI</p>
+        </div>
+        <div class="col-md-4 text-center mb-4">
+            <div class="step-number bg-warning text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 50px; height: 50px;">
+                <span class="fw-bold">3</span>
+            </div>
+            <h5>Get Results</h5>
+            <p>Receive ranked candidates with detailed insights and recommendations</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

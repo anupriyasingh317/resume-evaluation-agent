@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block title %}Evaluate Candidates - Resume Evaluation Agent{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0">
+                        <i class="fas fa-chart-line me-2"></i>Evaluate Candidates
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5>Current Requirements</h5>
+                            <div id="currentRequirements" class="alert alert-info">
+                                <p class="mb-0">No requirements loaded. Please <a href="{{ url_for('manual_requirements') }}">enter requirements manually</a> or <a href="{{ url_for('upload_job_description') }}">upload a job description</a>.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Available Resumes</h5>
+                            <div id="resumeCount" class="alert alert-secondary">
+                                <p class="mb-0"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-center mb-4">
+                        <button id="evaluateBtn" class="btn btn-primary btn-lg" disabled>
+                            <i class="fas fa-play me-2"></i>Start Evaluation
+                        </button>
+                    </div>
+
+                    <div id="evaluationProgress" class="text-center" style="display: none;">
+                        <div class="spinner-border text-primary me-2" role="status"></div>
+                        <span>Analyzing resumes with AI...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="resultsSection" style="display: none;">
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-trophy me-2"></i>Evaluation Results
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h3 class="text-success" id="strongMatches">0</h3>
+                                    <small class="text-muted">Strong Matches</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h3 class="text-warning" id="partialMatches">0</h3>
+                                    <small class="text-muted">Partial Matches</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h3 class="text-danger" id="noMatches">0</h3>
+                                    <small class="text-muted">No Matches</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h3 class="text-primary" id="totalCandidates">0</h3>
+                                    <small class="text-muted">Total Candidates</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="btn-group" role="group">
+                            <button id="downloadCsvBtn" class="btn btn-success" disabled>
+                                <i class="fas fa-download me-2"></i>Download CSV Report
+                            </button>
+                            <button id="clearResultsBtn" class="btn btn-outline-secondary" disabled>
+                                <i class="fas fa-trash me-2"></i>Clear Results
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <h5>Ranked Candidates</h5>
+                <div id="candidatesList">
+                    <!-- Candidates will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Candidate Details Modal -->
+<div class="modal fade" id="candidateModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Candidate Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="candidateDetails">
+                <!-- Details will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentRequirementsFile = null;
+let evaluationResults = null;
+let isEvaluating = false;  // Add flag to prevent multiple evaluations
+
+// Check for requirements and restore previous results on page load
+$(document).ready(function() {
+    checkForRequirements();
+    loadResumes();  // Add this to load resumes on page load
+    checkEvaluateButton();
+    
+    // Restore evaluation results if they exist in sessionStorage
+    const savedResults = sessionStorage.getItem('evaluationResults');
+    if (savedResults) {
+        try {
+            const results = JSON.parse(savedResults);
+            evaluationResults = results;
+            displayResults(results);
+            console.log('Restored previous evaluation results');
+        } catch (e) {
+            console.error('Error restoring results:', e);
+            sessionStorage.removeItem('evaluationResults');
+        }
+    }
+});
+
+function loadResumes() {
+    $.ajax({
+        url: '/api/list_resumes',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                const resumes = response.resumes;
+                $('#resumeCount').html(`
+                    <p class="mb-0"><strong>${resumes.length}</strong> resume files found</p>
+                    <small class="text-muted">${resumes.join(', ')}</small>
+                `);
+                
+                // Enable evaluate button if there are resumes and requirements
+                checkEvaluateButton();
+            }
+        },
+        error: function() {
+            $('#resumeCount').html('<p class="mb-0 text-danger">Error loading resumes</p>');
+        }
+    });
+}
+
+function checkForRequirements() {
+    // First check if requirements file is in URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const requirementsFile = urlParams.get('requirements');
+    
+    if (requirementsFile) {
+        // If URL parameter exists, use it directly
+        currentRequirementsFile = requirementsFile;
+        console.log('Using requirements file from URL:', requirementsFile);
+        
+        // Load the requirements details
+        $.ajax({
+            url: '/api/check_requirements',
+            method: 'GET',
+            success: function(response) {
+                if (response.success && response.requirements_file) {
+                    $('#currentRequirements').html(`
+                        <h6>${response.requirements.project_title}</h6>
+                        <p class="mb-0"><strong>Must-have:</strong> ${response.requirements.must_have_skills.join(', ')}</p>
+                        <p class="mb-0"><strong>Experience:</strong> ${response.requirements.experience_level}</p>
+                    `);
+                    checkEvaluateButton();
+                }
+            },
+            error: function() {
+                $('#currentRequirements').html('<p class="mb-0 text-danger">Error loading requirements</p>');
+            }
+        });
+    } else {
+        // Fall back to session-based check
+        $.ajax({
+            url: '/api/check_requirements',
+            method: 'GET',
+            success: function(response) {
+                if (response.success && response.requirements_file) {
+                    currentRequirementsFile = response.requirements_file;
+                    $('#currentRequirements').html(`
+                        <h6>${response.requirements.project_title}</h6>
+                        <p class="mb-0"><strong>Must-have:</strong> ${response.requirements.must_have_skills.join(', ')}</p>
+                        <p class="mb-0"><strong>Experience:</strong> ${response.requirements.experience_level}</p>
+                    `);
+                    checkEvaluateButton();
+                } else {
+                    $('#currentRequirements').html(`
+                        <p class="mb-0">No requirements loaded. Please <a href="/manual_requirements">enter requirements manually</a> or <a href="/upload_job_description">upload a job description</a>.</p>
+                    `);
+                }
+            },
+            error: function() {
+                $('#currentRequirements').html('<p class="mb-0 text-danger">Error loading requirements</p>');
+            }
+        });
+    }
+}
+
+function checkEvaluateButton() {
+    const hasResumes = $('#resumeCount').text().includes('resume files found');
+    const hasRequirements = currentRequirementsFile !== null;
+    
+    if (hasResumes && hasRequirements && !isEvaluating) {
+        $('#evaluateBtn').prop('disabled', false);
+    } else {
+        $('#evaluateBtn').prop('disabled', true);
+    }
+}
+
+$('#evaluateBtn').on('click', function evaluateResumes() {
+    if (!currentRequirementsFile) {
+        alert('Please load requirements first');
+        return;
+    }
+    
+    if (isEvaluating) {
+        alert('Evaluation already in progress. Please wait...');
+        return;
+    }
+    
+    isEvaluating = true;
+    checkEvaluateButton();
+    
+    $('#evaluateBtn').html('<i class="fas fa-spinner fa-spin me-2"></i>Evaluating...');
+    $('#evaluationProgress').show();
+    
+    // Add cache-busting timestamp to request
+    const timestamp = new Date().getTime();
+    
+    $.ajax({
+        url: '/api/evaluate',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ 
+            requirements_file: currentRequirementsFile,
+            timestamp: timestamp  // Add timestamp to prevent caching
+        }),
+        success: function(response) {
+            if (response.success) {
+                evaluationResults = response;
+                displayResults(response);
+            } else {
+                alert('Error: ' + response.error);
+            }
+        },
+        error: function(xhr) {
+            alert('Server error: ' + (xhr.responseJSON?.error || 'Unknown error'));
+        },
+        complete: function() {
+            isEvaluating = false;
+            checkEvaluateButton();
+            $('#evaluateBtn').html('<i class="fas fa-play me-2"></i>Start Evaluation');
+            $('#evaluationProgress').hide();
+        }
+    });
+});
+
+function displayResults(results) {
+    const summary = results.summary;
+    
+    // Store results in sessionStorage for persistence
+    sessionStorage.setItem('evaluationResults', JSON.stringify(results));
+    
+    // Enable action buttons
+    $('#downloadCsvBtn, #viewDetailsBtn, #clearResultsBtn').prop('disabled', false);
+    
+    // Update summary
+    $('#strongMatches').text(summary.suitable);
+    $('#partialMatches').text(summary.might_be_suitable);
+    $('#noMatches').text(summary.not_suitable);
+    $('#totalCandidates').text(summary.total_candidates);
+    
+    // Display candidates
+    const candidatesHtml = results.candidates.map(candidate => {
+        const matchClass = candidate.recommendation.toLowerCase().replace(' ', '-').replace(':', '');
+        const passedScreening = candidate.passed_screening ? 
+            '<span class="badge bg-success">Proceed to Interview</span>' : 
+            '<span class="badge bg-danger">Not Suitable</span>';
+        
+        return `
+            <div class="card candidate-card ${matchClass} mb-3">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-1">
+                            <h4 class="text-muted">#${candidate.rank}</h4>
+                        </div>
+                        <div class="col-md-4">
+                            <h6>${candidate.file_name}</h6>
+                            ${passedScreening}
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">Skill Match</small><br>
+                            <span>
+                                <strong class="${candidate.skill_match.includes('NO') ? 'text-danger' : 'text-success'}">${candidate.skill_match.split('):')[0] + ')'}</strong>${candidate.skill_match.includes('):') ? ': ' + candidate.skill_match.split('):').slice(1).join('):') : ''}
+                            </span>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">Experience</small><br>
+                            <span>
+                                <strong class="${candidate.experience.includes('NO') ? 'text-danger' : 'text-success'}">${candidate.experience.includes('YES') ? 'YES' : 'NO'}</strong>${candidate.experience.includes('YES') ? candidate.experience.replace('YES', '') : candidate.experience.replace('NO', '')}
+                            </span>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">Project Relevance</small><br>
+                            <span>
+                                <strong class="${candidate.project_relevance.includes('NO') ? 'text-danger' : 'text-success'}">${candidate.project_relevance.includes('YES') ? 'YES' : 'NO'}</strong>${candidate.project_relevance.includes('YES') ? candidate.project_relevance.replace('YES', '') : candidate.project_relevance.replace('NO', '')}
+                            </span>
+                        </div>
+                        <div class="col-md-1">
+                            <!-- Removed individual details button -->
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">${candidate.reasoning}</small>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    $('#candidatesList').html(candidatesHtml);
+    $('#resultsSection').show();
+    
+    // Scroll to results
+    $('html, body').animate({ scrollTop: $('#resultsSection').offset().top - 100 }, 1000);
+}
+
+$('#clearResultsBtn').on('click', function() {
+    if (confirm('Are you sure you want to clear the evaluation results?')) {
+        sessionStorage.removeItem('evaluationResults');
+        evaluationResults = null;
+        
+        // Reset UI to initial state
+        $('#candidatesList').html('<p class="text-muted">No evaluation results available. Please run an evaluation to see results.</p>');
+        $('#strongMatches').text('0');
+        $('#partialMatches').text('0');
+        $('#noMatches').text('0');
+        $('#totalCandidates').text('0');
+        
+        // Hide buttons that require results
+        $('#downloadCsvBtn, #clearResultsBtn').prop('disabled', true);
+        
+        console.log('Evaluation results cleared');
+    }
+});
+
+$('#downloadCsvBtn').on('click', function() {
+    if (evaluationResults) {
+        // Download the actual CSV file generated during evaluation
+        window.location.href = '/api/download_csv';
+    }
+});
+</script>
+{% endblock %}

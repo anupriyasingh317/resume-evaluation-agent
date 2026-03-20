@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Manual Requirements - Resume Evaluation Agent{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-edit me-2"></i>Enter Job Requirements Manually
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form id="manualRequirementsForm">
+                        <div class="mb-3">
+                            <label for="project_title" class="form-label">Project Title/Position *</label>
+                            <input type="text" class="form-control" id="project_title" required 
+                                   placeholder="e.g., Senior Python Developer">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="must_have_skills" class="form-label">Must-Have Skills *</label>
+                            <input type="text" class="form-control" id="must_have_skills" required 
+                                   placeholder="e.g., Python, SQL, AWS (comma-separated)">
+                            <small class="form-text text-muted">Enter critical skills that candidates must have</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="nice_to_have_skills" class="form-label">Nice-to-Have Skills</label>
+                            <input type="text" class="form-control" id="nice_to_have_skills" 
+                                   placeholder="e.g., Docker, Kubernetes, React (comma-separated)">
+                            <small class="form-text text-muted">Optional but preferred skills</small>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="experience_level" class="form-label">Experience Level</label>
+                                <select class="form-select" id="experience_level">
+                                    <option value="Entry level">Entry level</option>
+                                    <option value="1+ years">1+ years</option>
+                                    <option value="2+ years">2+ years</option>
+                                    <option value="3+ years">3+ years</option>
+                                    <option value="5+ years" selected>5+ years</option>
+                                    <option value="7+ years">7+ years</option>
+                                    <option value="10+ years">10+ years</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="project_type" class="form-label">Project Type</label>
+                                <input type="text" class="form-control" id="project_type" 
+                                       placeholder="e.g., backend, devops, full-stack" value="backend, devops">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Job Description</label>
+                            <textarea class="form-control" id="description" rows="4" 
+                                      placeholder="Brief description of the role and responsibilities..."></textarea>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save me-2"></i>Save Requirements
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div id="requirementsSaved" class="alert alert-success mt-3" style="display: none;">
+                <h5><i class="fas fa-check-circle me-2"></i>Requirements Saved!</h5>
+                <p>Your requirements have been saved successfully. You can now proceed to evaluate candidates.</p>
+                <div id="goToEvaluation" class="mt-3" style="display: none;">
+                    <!-- Button will be inserted here dynamically -->
+                </div>
+            </div>
+
+            <div id="requirementsError" class="alert alert-danger mt-3" style="display: none;">
+                <h5><i class="fas fa-exclamation-circle me-2"></i>Error</h5>
+                <p id="errorMessage">There was an error saving your requirements.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('#manualRequirementsForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        // Get form data
+        const formData = {
+            project_title: $('#project_title').val(),
+            must_have_skills: $('#must_have_skills').val().split(',').map(s => s.trim()).filter(s => s),
+            nice_to_have_skills: $('#nice_to_have_skills').val().split(',').map(s => s.trim()).filter(s => s),
+            experience_level: $('#experience_level').val(),
+            project_type: $('#project_type').val(),
+            description: $('#description').val(),
+            required_skills: $('#must_have_skills').val().split(',').map(s => s.trim()).filter(s => s) // Same as must-have for now
+        };
+        
+        // Show loading
+        $('button[type="submit"]').prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i>Saving...');
+        
+        // Send to API
+        $.ajax({
+            url: '/api/process_manual_requirements',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            success: function(response) {
+                if (response.success) {
+                    $('#requirementsSaved').show();
+                    $('#requirementsError').hide();
+                    $('html, body').animate({ scrollTop: $('#requirementsSaved').offset().top - 100 }, 1000);
+                    
+                    // Create dynamic button with requirements file
+                    const requirementsFile = response.requirements_file;
+                    $('#goToEvaluation').html(`
+                        <a href="/evaluate?requirements=${requirementsFile}" class="btn btn-success">
+                            <i class="fas fa-play me-2"></i>Go to Evaluation
+                        </a>
+                    `).show();
+                } else {
+                    $('#errorMessage').text(response.error);
+                    $('#requirementsError').show();
+                    $('#requirementsSaved').hide();
+                }
+            },
+            error: function(xhr) {
+                $('#errorMessage').text('Server error: ' + (xhr.responseJSON?.error || 'Unknown error'));
+                $('#requirementsError').show();
+                $('#requirementsSaved').hide();
+            },
+            complete: function() {
+                $('button[type="submit"]').prop('disabled', false).html('<i class="fas fa-save me-2"></i>Save Requirements');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
