@@ -436,9 +436,21 @@
         // Display candidates
         const candidatesHtml = results.candidates.map(candidate => {
             const matchClass = candidate.recommendation.toLowerCase().replace(' ', '-').replace(':', '');
-            const passedScreening = candidate.passed_screening ?
-                '<span class="badge bg-success">Proceed to Interview</span>' :
-                '<span class="badge bg-danger">Not Suitable</span>';
+            let badgeClass = 'bg-secondary';
+            let recommendation = candidate.recommendation;
+
+            if (recommendation.includes('Suitable') && !recommendation.includes('Might')) {
+                badgeClass = 'bg-success';
+                recommendation = 'Suitable';
+            } else if (recommendation.includes('Might')) {
+                badgeClass = 'bg-warning text-dark';
+                recommendation = 'Might be suitable';
+            } else if (recommendation.includes('Not')) {
+                badgeClass = 'bg-danger';
+                recommendation = 'Not suitable';
+            }
+
+            const passedScreening = `<span class="badge ${badgeClass}">${recommendation}</span>`;
 
             return `
             <div class="card candidate-card ${matchClass} mb-3">
