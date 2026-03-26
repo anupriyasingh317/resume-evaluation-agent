@@ -17,13 +17,29 @@
                         <div class="col-md-6">
                             <h5>Current Requirements</h5>
                             <div id="currentRequirements" class="alert alert-info">
-                                <p class="mb-0">No requirements loaded. Please <a href="{{ url_for('manual_requirements') }}">enter requirements manually</a> or <a href="{{ url_for('upload_job_description') }}">upload a job description</a>.</p>
+                                <p class="mb-0">No requirements loaded. Please <a
+                                        href="{{ url_for('manual_requirements') }}">enter requirements manually</a> or
+                                    <a href="{{ url_for('upload_job_description') }}">upload a job description</a>.
+                                </p>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <h5>Available Resumes</h5>
                             <div id="resumeCount" class="alert alert-secondary">
                                 <p class="mb-0"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</p>
+                            </div>
+                            <div class="mt-3">
+                                <label for="resumeUpload" class="form-label fw-bold">Upload Resumes</label>
+                                <input class="form-control" type="file" id="resumeUpload" multiple
+                                    accept=".pdf,.docx,.txt">
+                                <small class="text-muted">Accepted: PDF, DOCX, TXT (max 16MB each)</small>
+                                <button id="uploadResumesBtn" class="btn btn-outline-primary btn-sm mt-2" disabled>
+                                    <i class="fas fa-upload me-1"></i>Upload
+                                </button>
+                                <button id="clearResumesBtn" class="btn btn-outline-danger btn-sm mt-2 ms-2">
+                                    <i class="fas fa-trash me-1"></i>Clear All Resumes
+                                </button>
+                                <span id="uploadStatus" class="ms-2 small"></span>
                             </div>
                         </div>
                     </div>
@@ -34,9 +50,19 @@
                         </button>
                     </div>
 
-                    <div id="evaluationProgress" class="text-center" style="display: none;">
-                        <div class="spinner-border text-primary me-2" role="status"></div>
-                        <span>Analyzing resumes with AI...</span>
+                    <div id="evaluationProgress" class="mb-4" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span id="progressLabel"><i class="fas fa-spinner fa-spin me-2"></i>Starting
+                                evaluation...</span>
+                            <span id="progressPercent" class="fw-bold">0%</span>
+                        </div>
+                        <div class="progress" style="height: 24px;">
+                            <div id="progressBar"
+                                class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0"
+                                aria-valuemax="100"></div>
+                        </div>
+                        <small id="progressFile" class="text-muted mt-1 d-block"></small>
                     </div>
                 </div>
             </div>
@@ -56,20 +82,20 @@
                         <div class="row mb-4">
                             <div class="col-md-3">
                                 <div class="text-center">
-                                    <h3 class="text-success" id="strongMatches">0</h3>
-                                    <small class="text-muted">Strong Matches</small>
+                                    <h3 class="text-success" id="suitable">0</h3>
+                                    <small class="text-muted">Suitable</small>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="text-center">
-                                    <h3 class="text-warning" id="partialMatches">0</h3>
-                                    <small class="text-muted">Partial Matches</small>
+                                    <h3 class="text-warning" id="mightBeSuitable">0</h3>
+                                    <small class="text-muted">Might be suitable</small>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="text-center">
-                                    <h3 class="text-danger" id="noMatches">0</h3>
-                                    <small class="text-muted">No Matches</small>
+                                    <h3 class="text-danger" id="notSuitable">0</h3>
+                                    <small class="text-muted">Not suitable</small>
                                 </div>
                             </div>
                             <div class="col-md-3">
@@ -125,190 +151,296 @@
 
 {% block scripts %}
 <script>
-let currentRequirementsFile = null;
-let evaluationResults = null;
-let isEvaluating = false;  // Add flag to prevent multiple evaluations
+    let currentRequirementsFile = null;
+    let evaluationResults = null;
+    let isEvaluating = false;  // Add flag to prevent multiple evaluations
 
-// Check for requirements and restore previous results on page load
-$(document).ready(function() {
-    checkForRequirements();
-    loadResumes();  // Add this to load resumes on page load
-    checkEvaluateButton();
-    
-    // Restore evaluation results if they exist in sessionStorage
-    const savedResults = sessionStorage.getItem('evaluationResults');
-    if (savedResults) {
-        try {
-            const results = JSON.parse(savedResults);
-            evaluationResults = results;
-            displayResults(results);
-            console.log('Restored previous evaluation results');
-        } catch (e) {
-            console.error('Error restoring results:', e);
-            sessionStorage.removeItem('evaluationResults');
-        }
-    }
-});
-
-function loadResumes() {
-    $.ajax({
-        url: '/api/list_resumes',
-        method: 'GET',
-        success: function(response) {
-            if (response.success) {
-                const resumes = response.resumes;
-                $('#resumeCount').html(`
-                    <p class="mb-0"><strong>${resumes.length}</strong> resume files found</p>
-                    <small class="text-muted">${resumes.join(', ')}</small>
-                `);
-                
-                // Enable evaluate button if there are resumes and requirements
-                checkEvaluateButton();
-            }
-        },
-        error: function() {
-            $('#resumeCount').html('<p class="mb-0 text-danger">Error loading resumes</p>');
-        }
-    });
-}
-
-function checkForRequirements() {
-    // First check if requirements file is in URL parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    const requirementsFile = urlParams.get('requirements');
-    
-    if (requirementsFile) {
-        // If URL parameter exists, use it directly
-        currentRequirementsFile = requirementsFile;
-        console.log('Using requirements file from URL:', requirementsFile);
-        
-        // Load the requirements details
+    // Clear all resumes
+    $('#clearResumesBtn').on('click', function () {
+        if (!confirm('Remove all existing resumes?')) return;
+        const btn = $(this);
+        btn.prop('disabled', true);
         $.ajax({
-            url: '/api/check_requirements',
-            method: 'GET',
-            success: function(response) {
-                if (response.success && response.requirements_file) {
-                    $('#currentRequirements').html(`
-                        <h6>${response.requirements.project_title}</h6>
-                        <p class="mb-0"><strong>Must-have:</strong> ${response.requirements.must_have_skills.join(', ')}</p>
-                        <p class="mb-0"><strong>Experience:</strong> ${response.requirements.experience_level}</p>
-                    `);
-                    checkEvaluateButton();
-                }
-            },
-            error: function() {
-                $('#currentRequirements').html('<p class="mb-0 text-danger">Error loading requirements</p>');
-            }
-        });
-    } else {
-        // Fall back to session-based check
-        $.ajax({
-            url: '/api/check_requirements',
-            method: 'GET',
-            success: function(response) {
-                if (response.success && response.requirements_file) {
-                    currentRequirementsFile = response.requirements_file;
-                    $('#currentRequirements').html(`
-                        <h6>${response.requirements.project_title}</h6>
-                        <p class="mb-0"><strong>Must-have:</strong> ${response.requirements.must_have_skills.join(', ')}</p>
-                        <p class="mb-0"><strong>Experience:</strong> ${response.requirements.experience_level}</p>
-                    `);
+            url: '/api/clear_resumes',
+            method: 'POST',
+            success: function (response) {
+                if (response.success) {
+                    $('#uploadStatus').html('<span class="text-success"><i class="fas fa-check me-1"></i>Resumes cleared</span>');
+                    loadResumes();
                     checkEvaluateButton();
                 } else {
-                    $('#currentRequirements').html(`
-                        <p class="mb-0">No requirements loaded. Please <a href="/manual_requirements">enter requirements manually</a> or <a href="/upload_job_description">upload a job description</a>.</p>
-                    `);
+                    $('#uploadStatus').html('<span class="text-danger">' + response.error + '</span>');
                 }
             },
-            error: function() {
-                $('#currentRequirements').html('<p class="mb-0 text-danger">Error loading requirements</p>');
+            error: function () {
+                $('#uploadStatus').html('<span class="text-danger">Failed to clear resumes</span>');
+            },
+            complete: function () {
+                btn.prop('disabled', false);
+            }
+        });
+    });
+
+    // Resume upload handling
+    $('#resumeUpload').on('change', function () {
+        $('#uploadResumesBtn').prop('disabled', this.files.length === 0);
+        $('#uploadStatus').text('');
+    });
+
+    $('#uploadResumesBtn').on('click', function () {
+        const files = $('#resumeUpload')[0].files;
+        if (files.length === 0) return;
+
+        const formData = new FormData();
+        for (let i = 0; i < files.length; i++) {
+            formData.append('resumes', files[i]);
+        }
+
+        const btn = $(this);
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Uploading...');
+        $('#uploadStatus').text('');
+
+        $.ajax({
+            url: '/api/upload_resumes',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function (response) {
+                if (response.success) {
+                    $('#uploadStatus').html('<span class="text-success"><i class="fas fa-check me-1"></i>' + response.uploaded + ' file(s) uploaded</span>');
+                    $('#resumeUpload').val('');
+                    loadResumes();
+                    checkEvaluateButton();
+                } else {
+                    $('#uploadStatus').html('<span class="text-danger">' + response.error + '</span>');
+                }
+            },
+            error: function () {
+                $('#uploadStatus').html('<span class="text-danger">Upload failed</span>');
+            },
+            complete: function () {
+                btn.prop('disabled', true).html('<i class="fas fa-upload me-1"></i>Upload');
+            }
+        });
+    });
+
+    // Check for requirements and restore previous results on page load
+    $(document).ready(function () {
+        checkForRequirements();
+        loadResumes();  // Add this to load resumes on page load
+        checkEvaluateButton();
+
+        // Restore evaluation results if they exist in sessionStorage
+        const savedResults = sessionStorage.getItem('evaluationResults');
+        if (savedResults) {
+            try {
+                const results = JSON.parse(savedResults);
+                evaluationResults = results;
+                displayResults(results);
+                console.log('Restored previous evaluation results');
+            } catch (e) {
+                console.error('Error restoring results:', e);
+                sessionStorage.removeItem('evaluationResults');
+            }
+        }
+    });
+
+    function loadResumes() {
+        $.ajax({
+            url: '/api/list_resumes',
+            method: 'GET',
+            success: function (response) {
+                if (response.success) {
+                    const resumes = response.resumes;
+                    const supportedResumes = resumes.filter(f => !f.toLowerCase().endsWith('.doc'));
+                    const skippedResumes = resumes.filter(f => f.toLowerCase().endsWith('.doc'));
+
+                    let countHtml = `<p class="mb-0"><strong>${supportedResumes.length}</strong> resume files found for evaluation</p>`;
+                    if (skippedResumes.length > 0) {
+                        countHtml += `<small class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>${skippedResumes.length} legacy .doc file(s) skipped. Please convert to .docx or .pdf</small><br>`;
+                    }
+                    countHtml += `<small class="text-muted">${supportedResumes.join(', ')}</small>`;
+
+                    $('#resumeCount').html(countHtml);
+
+                    // Enable evaluate button if there are resumes and requirements
+                    checkEvaluateButton();
+                }
+            },
+            error: function () {
+                $('#resumeCount').html('<p class="mb-0 text-danger">Error loading resumes</p>');
             }
         });
     }
-}
 
-function checkEvaluateButton() {
-    const hasResumes = $('#resumeCount').text().includes('resume files found');
-    const hasRequirements = currentRequirementsFile !== null;
-    
-    if (hasResumes && hasRequirements && !isEvaluating) {
-        $('#evaluateBtn').prop('disabled', false);
-    } else {
-        $('#evaluateBtn').prop('disabled', true);
-    }
-}
+    function checkForRequirements() {
+        // First check if requirements file is in URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const requirementsFile = urlParams.get('requirements');
 
-$('#evaluateBtn').on('click', function evaluateResumes() {
-    if (!currentRequirementsFile) {
-        alert('Please load requirements first');
-        return;
-    }
-    
-    if (isEvaluating) {
-        alert('Evaluation already in progress. Please wait...');
-        return;
-    }
-    
-    isEvaluating = true;
-    checkEvaluateButton();
-    
-    $('#evaluateBtn').html('<i class="fas fa-spinner fa-spin me-2"></i>Evaluating...');
-    $('#evaluationProgress').show();
-    
-    // Add cache-busting timestamp to request
-    const timestamp = new Date().getTime();
-    
-    $.ajax({
-        url: '/api/evaluate',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({ 
-            requirements_file: currentRequirementsFile,
-            timestamp: timestamp  // Add timestamp to prevent caching
-        }),
-        success: function(response) {
-            if (response.success) {
-                evaluationResults = response;
-                displayResults(response);
-            } else {
-                alert('Error: ' + response.error);
-            }
-        },
-        error: function(xhr) {
-            alert('Server error: ' + (xhr.responseJSON?.error || 'Unknown error'));
-        },
-        complete: function() {
-            isEvaluating = false;
-            checkEvaluateButton();
-            $('#evaluateBtn').html('<i class="fas fa-play me-2"></i>Start Evaluation');
-            $('#evaluationProgress').hide();
+        if (requirementsFile) {
+            // If URL parameter exists, use it directly
+            currentRequirementsFile = requirementsFile;
+            console.log('Using requirements file from URL:', requirementsFile);
+
+            // Load the requirements details
+            $.ajax({
+                url: '/api/check_requirements',
+                method: 'GET',
+                success: function (response) {
+                    if (response.success && response.requirements_file) {
+                        $('#currentRequirements').html(`
+                        <h6>${response.requirements.project_title}</h6>
+                        <p class="mb-0"><strong>Must-have:</strong> ${response.requirements.must_have_skills.join(', ')}</p>
+                        <p class="mb-0"><strong>Experience:</strong> ${response.requirements.experience_level}</p>
+                    `);
+                        checkEvaluateButton();
+                    }
+                },
+                error: function () {
+                    $('#currentRequirements').html('<p class="mb-0 text-danger">Error loading requirements</p>');
+                }
+            });
+        } else {
+            // Fall back to session-based check
+            $.ajax({
+                url: '/api/check_requirements',
+                method: 'GET',
+                success: function (response) {
+                    if (response.success && response.requirements_file) {
+                        currentRequirementsFile = response.requirements_file;
+                        $('#currentRequirements').html(`
+                        <h6>${response.requirements.project_title}</h6>
+                        <p class="mb-0"><strong>Must-have:</strong> ${response.requirements.must_have_skills.join(', ')}</p>
+                        <p class="mb-0"><strong>Experience:</strong> ${response.requirements.experience_level}</p>
+                    `);
+                        checkEvaluateButton();
+                    } else {
+                        $('#currentRequirements').html(`
+                        <p class="mb-0">No requirements loaded. Please <a href="/manual_requirements">enter requirements manually</a> or <a href="/upload_job_description">upload a job description</a>.</p>
+                    `);
+                    }
+                },
+                error: function () {
+                    $('#currentRequirements').html('<p class="mb-0 text-danger">Error loading requirements</p>');
+                }
+            });
         }
-    });
-});
+    }
 
-function displayResults(results) {
-    const summary = results.summary;
-    
-    // Store results in sessionStorage for persistence
-    sessionStorage.setItem('evaluationResults', JSON.stringify(results));
-    
-    // Enable action buttons
-    $('#downloadCsvBtn, #viewDetailsBtn, #clearResultsBtn').prop('disabled', false);
-    
-    // Update summary
-    $('#strongMatches').text(summary.suitable);
-    $('#partialMatches').text(summary.might_be_suitable);
-    $('#noMatches').text(summary.not_suitable);
-    $('#totalCandidates').text(summary.total_candidates);
-    
-    // Display candidates
-    const candidatesHtml = results.candidates.map(candidate => {
-        const matchClass = candidate.recommendation.toLowerCase().replace(' ', '-').replace(':', '');
-        const passedScreening = candidate.passed_screening ? 
-            '<span class="badge bg-success">Proceed to Interview</span>' : 
-            '<span class="badge bg-danger">Not Suitable</span>';
-        
-        return `
+    function checkEvaluateButton() {
+        const hasResumes = $('#resumeCount').text().includes('resume files found');
+        const hasRequirements = currentRequirementsFile !== null;
+
+        if (hasResumes && hasRequirements && !isEvaluating) {
+            $('#evaluateBtn').prop('disabled', false);
+        } else {
+            $('#evaluateBtn').prop('disabled', true);
+        }
+    }
+
+    $('#evaluateBtn').on('click', function evaluateResumes() {
+        if (!currentRequirementsFile) {
+            alert('Please load requirements first');
+            return;
+        }
+
+        if (isEvaluating) {
+            alert('Evaluation already in progress. Please wait...');
+            return;
+        }
+
+        isEvaluating = true;
+        checkEvaluateButton();
+
+        $('#evaluateBtn').html('<i class="fas fa-spinner fa-spin me-2"></i>Evaluating...');
+        $('#evaluationProgress').show();
+        $('#progressBar').css('width', '0%');
+        $('#progressPercent').text('0%');
+        $('#progressLabel').html('<i class="fas fa-spinner fa-spin me-2"></i>Starting evaluation...');
+        $('#progressFile').text('');
+
+        // Start polling for progress
+        const progressInterval = setInterval(function () {
+            $.ajax({
+                url: '/api/progress',
+                method: 'GET',
+                success: function (data) {
+                    if (data.status === 'running' && data.total > 0) {
+                        const pct = Math.round((data.current / data.total) * 100);
+                        $('#progressBar').css('width', pct + '%');
+                        $('#progressPercent').text(pct + '%');
+                        $('#progressLabel').html('<i class="fas fa-cog fa-spin me-2"></i>Evaluating resumes (' + data.current + '/' + data.total + ')');
+                        $('#progressFile').text('Processing: ' + data.current_file);
+                    } else if (data.status === 'done') {
+                        $('#progressBar').css('width', '100%').removeClass('progress-bar-animated').addClass('bg-success');
+                        $('#progressPercent').text('100%');
+                        $('#progressLabel').html('<i class="fas fa-check me-2"></i>Evaluation complete!');
+                        $('#progressFile').text('');
+                    }
+                }
+            });
+        }, 1000);
+
+        // Add cache-busting timestamp to request
+        const timestamp = new Date().getTime();
+
+        $.ajax({
+            url: '/api/evaluate',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                requirements_file: currentRequirementsFile,
+                timestamp: timestamp  // Add timestamp to prevent caching
+            }),
+            success: function (response) {
+                if (response.success) {
+                    evaluationResults = response;
+                    displayResults(response);
+                } else {
+                    alert('Error: ' + response.error);
+                }
+            },
+            error: function (xhr) {
+                alert('Server error: ' + (xhr.responseJSON?.error || 'Unknown error'));
+            },
+            complete: function () {
+                clearInterval(progressInterval);
+                isEvaluating = false;
+                checkEvaluateButton();
+                $('#evaluateBtn').html('<i class="fas fa-play me-2"></i>Start Evaluation');
+                setTimeout(function () {
+                    $('#evaluationProgress').hide();
+                    $('#progressBar').addClass('progress-bar-animated').removeClass('bg-success');
+                }, 2000);
+            }
+        });
+    });
+
+    function displayResults(results) {
+        const summary = results.summary;
+
+        // Store results in sessionStorage for persistence
+        sessionStorage.setItem('evaluationResults', JSON.stringify(results));
+
+        // Enable action buttons
+        $('#downloadCsvBtn, #viewDetailsBtn, #clearResultsBtn').prop('disabled', false);
+
+        // Update summary
+        $('#suitable').text(summary.suitable);
+        $('#mightBeSuitable').text(summary.might_be_suitable || summary.partial_matches || 0);
+        $('#notSuitable').text(summary.not_suitable || summary.no_matches || 0);
+        $('#totalCandidates').text(summary.total_candidates);
+
+        // Display candidates
+        const candidatesHtml = results.candidates.map(candidate => {
+            const matchClass = candidate.recommendation.toLowerCase().replace(' ', '-').replace(':', '');
+            const passedScreening = candidate.passed_screening ?
+                '<span class="badge bg-success">Proceed to Interview</span>' :
+                '<span class="badge bg-danger">Not Suitable</span>';
+
+            return `
             <div class="card candidate-card ${matchClass} mb-3">
                 <div class="card-body">
                     <div class="row align-items-center">
@@ -317,24 +449,27 @@ function displayResults(results) {
                         </div>
                         <div class="col-md-4">
                             <h6>${candidate.file_name}</h6>
-                            ${passedScreening}
+                            <div class="d-flex align-items-center gap-2">
+                                ${passedScreening}
+                                <span class="badge bg-primary">Overall: ${candidate.overall_score}%</span>
+                            </div>
                         </div>
                         <div class="col-md-2">
                             <small class="text-muted">Skill Match</small><br>
                             <span>
-                                <strong class="${candidate.skill_match.includes('NO') ? 'text-danger' : 'text-success'}">${candidate.skill_match.split('):')[0] + ')'}</strong>${candidate.skill_match.includes('):') ? ': ' + candidate.skill_match.split('):').slice(1).join('):') : ''}
+                                <strong class="${candidate.skill_match.includes('NO') ? 'text-danger' : 'text-success'}">${candidate.skill_match}</strong>
                             </span>
                         </div>
                         <div class="col-md-2">
                             <small class="text-muted">Experience</small><br>
                             <span>
-                                <strong class="${candidate.experience.includes('NO') ? 'text-danger' : 'text-success'}">${candidate.experience.includes('YES') ? 'YES' : 'NO'}</strong>${candidate.experience.includes('YES') ? candidate.experience.replace('YES', '') : candidate.experience.replace('NO', '')}
+                                <strong class="${candidate.experience.includes('NO') ? 'text-danger' : 'text-success'}">${candidate.experience}</strong>
                             </span>
                         </div>
                         <div class="col-md-2">
                             <small class="text-muted">Project Relevance</small><br>
                             <span>
-                                <strong class="${candidate.project_relevance.includes('NO') ? 'text-danger' : 'text-success'}">${candidate.project_relevance.includes('YES') ? 'YES' : 'NO'}</strong>${candidate.project_relevance.includes('YES') ? candidate.project_relevance.replace('YES', '') : candidate.project_relevance.replace('NO', '')}
+                                <strong class="${candidate.project_relevance.includes('NO') ? 'text-danger' : 'text-success'}">${candidate.project_relevance}</strong>
                             </span>
                         </div>
                         <div class="col-md-1">
@@ -347,39 +482,39 @@ function displayResults(results) {
                 </div>
             </div>
         `;
-    }).join('');
-    
-    $('#candidatesList').html(candidatesHtml);
-    $('#resultsSection').show();
-    
-    // Scroll to results
-    $('html, body').animate({ scrollTop: $('#resultsSection').offset().top - 100 }, 1000);
-}
+        }).join('');
 
-$('#clearResultsBtn').on('click', function() {
-    if (confirm('Are you sure you want to clear the evaluation results?')) {
-        sessionStorage.removeItem('evaluationResults');
-        evaluationResults = null;
-        
-        // Reset UI to initial state
-        $('#candidatesList').html('<p class="text-muted">No evaluation results available. Please run an evaluation to see results.</p>');
-        $('#strongMatches').text('0');
-        $('#partialMatches').text('0');
-        $('#noMatches').text('0');
-        $('#totalCandidates').text('0');
-        
-        // Hide buttons that require results
-        $('#downloadCsvBtn, #clearResultsBtn').prop('disabled', true);
-        
-        console.log('Evaluation results cleared');
-    }
-});
+        $('#candidatesList').html(candidatesHtml);
+        $('#resultsSection').show();
 
-$('#downloadCsvBtn').on('click', function() {
-    if (evaluationResults) {
-        // Download the actual CSV file generated during evaluation
-        window.location.href = '/api/download_csv';
+        // Scroll to results
+        $('html, body').animate({ scrollTop: $('#resultsSection').offset().top - 100 }, 1000);
     }
-});
+
+    $('#clearResultsBtn').on('click', function () {
+        if (confirm('Are you sure you want to clear the evaluation results?')) {
+            sessionStorage.removeItem('evaluationResults');
+            evaluationResults = null;
+
+            // Reset UI to initial state
+            $('#candidatesList').html('<p class="text-muted">No evaluation results available. Please run an evaluation to see results.</p>');
+            $('#strongMatches').text('0');
+            $('#partialMatches').text('0');
+            $('#noMatches').text('0');
+            $('#totalCandidates').text('0');
+
+            // Hide buttons that require results
+            $('#downloadCsvBtn, #clearResultsBtn').prop('disabled', true);
+
+            console.log('Evaluation results cleared');
+        }
+    });
+
+    $('#downloadCsvBtn').on('click', function () {
+        if (evaluationResults) {
+            // Download the actual CSV file generated during evaluation
+            window.location.href = '/api/download_csv';
+        }
+    });
 </script>
 {% endblock %}

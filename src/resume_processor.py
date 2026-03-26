@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class ResumeProcessor:
     """Handles parsing of resume files (PDF, DOCX, TXT) to extract text content."""
     
-    SUPPORTED_EXTENSIONS = {'.pdf', '.docx', '.txt', '.doc'}
+    SUPPORTED_EXTENSIONS = {'.pdf', '.docx', '.txt'}
     
     def __init__(self, resume_directory: str):
         self.resume_directory = Path(resume_directory)
@@ -81,8 +81,8 @@ class ResumeProcessor:
         elif extension == '.txt':
             return self.extract_text_from_txt(file_path)
         elif extension == '.doc':
-            # .doc files are not directly supported, would need additional library
-            logger.warning(f"DOC format not supported: {file_path}")
+            # .doc files are not directly supported
+            logger.warning(f"Legacy DOC format detected: {file_path.name}. Please convert to .docx or .pdf for processing.")
             return None
         else:
             logger.error(f"Unsupported file format: {extension}")

@@ -16,13 +16,14 @@
                     <form id="uploadForm" enctype="multipart/form-data">
                         <div class="mb-4">
                             <div class="d-flex justify-content-center">
-                                <div class="upload-area border-2 border-dashed border-secondary rounded p-5 text-center" 
-                                     style="border-style: dashed !important; min-height: 200px;">
+                                <div class="upload-area border-2 border-dashed border-secondary rounded p-5 text-center"
+                                    style="border-style: dashed !important; min-height: 200px;">
                                     <i class="fas fa-cloud-upload-alt fa-4x text-muted mb-3"></i>
                                     <h5>Drop your job description here</h5>
                                     <p class="text-muted">or click to browse</p>
                                     <p class="small text-muted">Supported formats: PDF, DOCX, TXT (Max 16MB)</p>
-                                    <input type="file" id="fileInput" name="file" accept=".pdf,.docx,.doc,.txt" style="display: none;">
+                                    <input type="file" id="fileInput" name="file" accept=".pdf,.docx,.txt"
+                                        style="display: none;">
                                 </div>
                             </div>
                         </div>
@@ -48,7 +49,8 @@
 
             <div id="uploadSuccess" class="alert alert-success mt-3" style="display: none;">
                 <h5><i class="fas fa-check-circle me-2"></i>Requirements Extracted Successfully!</h5>
-                <p>The AI has extracted requirements from your job description. You can now proceed to evaluate candidates.</p>
+                <p>The AI has extracted requirements from your job description. You can now proceed to evaluate
+                    candidates.</p>
                 <a href="/evaluate" class="btn btn-success">
                     <i class="fas fa-chart-line me-2"></i>Go to Evaluation
                 </a>
@@ -65,118 +67,118 @@
 
 {% block scripts %}
 <script>
-$(document).ready(function() {
-    // File upload handling
-    const fileInput = document.getElementById('fileInput');
-    const uploadArea = document.querySelector('.upload-area');
-    
-    // Click to upload (only on the upload area, not on a separate button)
-    uploadArea.addEventListener('click', () => {
-        fileInput.click();
-    });
-    
-    // Drag and drop
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('border-primary', 'bg-light');
-    });
-    
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.classList.remove('border-primary', 'bg-light');
-    });
-    
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('border-primary', 'bg-light');
-        
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            fileInput.files = files;
-            handleFileSelect(files[0]);
+    $(document).ready(function () {
+        // File upload handling
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.querySelector('.upload-area');
+
+        // Click to upload (only on the upload area, not on a separate button)
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('border-primary', 'bg-light');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('border-primary', 'bg-light');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('border-primary', 'bg-light');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect(files[0]);
+            }
+        });
+
+        // File selection
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelect(file) {
+            // Check file type
+            const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+            if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|docx|txt)$/i)) {
+                $('#uploadErrorMessage').text('Invalid file type. Please upload PDF, DOCX, or TXT files.');
+                $('#uploadError').show();
+                return;
+            }
+
+            // Check file size (16MB)
+            if (file.size > 16 * 1024 * 1024) {
+                $('#uploadErrorMessage').text('File too large. Maximum size is 16MB.');
+                $('#uploadError').show();
+                return;
+            }
+
+            // Show file info
+            $('#fileName').text(file.name + ' (' + (file.size / 1024 / 1024).toFixed(2) + ' MB)');
+            $('#fileInfo').show();
+            $('#uploadBtn').prop('disabled', false);
+            $('#uploadError').hide();
         }
-    });
-    
-    // File selection
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handleFileSelect(e.target.files[0]);
-        }
-    });
-    
-    function handleFileSelect(file) {
-        // Check file type
-        const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'text/plain'];
-        if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|docx|doc|txt)$/i)) {
-            $('#uploadErrorMessage').text('Invalid file type. Please upload PDF, DOCX, DOC, or TXT files.');
-            $('#uploadError').show();
-            return;
-        }
-        
-        // Check file size (16MB)
-        if (file.size > 16 * 1024 * 1024) {
-            $('#uploadErrorMessage').text('File too large. Maximum size is 16MB.');
-            $('#uploadError').show();
-            return;
-        }
-        
-        // Show file info
-        $('#fileName').text(file.name + ' (' + (file.size / 1024 / 1024).toFixed(2) + ' MB)');
-        $('#fileInfo').show();
-        $('#uploadBtn').prop('disabled', false);
-        $('#uploadError').hide();
-    }
-    
-    // Form submission
-    $('#uploadForm').on('submit', function(e) {
-        e.preventDefault();
-        
-        const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-        
-        // Show loading
-        $('#uploadBtn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i>Processing with AI...');
-        
-        $.ajax({
-            url: '/api/upload_job_description',
-            method: 'POST',
-            data: formData,
-            processData: false,
-            contentType: false,
-            success: function(response) {
-                if (response.success) {
-                    // Show extracted requirements
-                    const reqs = response.requirements;
-                    let preview = `
+
+        // Form submission
+        $('#uploadForm').on('submit', function (e) {
+            e.preventDefault();
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            // Show loading
+            $('#uploadBtn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i>Processing with AI...');
+
+            $.ajax({
+                url: '/api/upload_job_description',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    if (response.success) {
+                        // Show extracted requirements
+                        const reqs = response.requirements;
+                        let preview = `
                         <strong>Project:</strong> ${reqs.project_title}<br>
                         <strong>Must-Have Skills:</strong> ${reqs.must_have_skills.join(', ')}<br>
                         <strong>Experience:</strong> ${reqs.experience_level}<br>
                         <strong>Type:</strong> ${reqs.project_type}
                     `;
-                    $('#requirementsPreview').html(preview);
-                    $('#extractedRequirements').show();
-                    
-                    // Show success message
-                    $('#uploadSuccess').show();
-                    $('#uploadError').hide();
-                    
-                    // Scroll to success message
-                    $('html, body').animate({ scrollTop: $('#uploadSuccess').offset().top - 100 }, 1000);
-                } else {
-                    $('#uploadErrorMessage').text(response.error);
+                        $('#requirementsPreview').html(preview);
+                        $('#extractedRequirements').show();
+
+                        // Show success message
+                        $('#uploadSuccess').show();
+                        $('#uploadError').hide();
+
+                        // Scroll to success message
+                        $('html, body').animate({ scrollTop: $('#uploadSuccess').offset().top - 100 }, 1000);
+                    } else {
+                        $('#uploadErrorMessage').text(response.error);
+                        $('#uploadError').show();
+                        $('#uploadSuccess').hide();
+                    }
+                },
+                error: function (xhr) {
+                    $('#uploadErrorMessage').text('Server error: ' + (xhr.responseJSON?.error || 'Unknown error'));
                     $('#uploadError').show();
                     $('#uploadSuccess').hide();
+                },
+                complete: function () {
+                    $('#uploadBtn').prop('disabled', false).html('<i class="fas fa-robot me-2"></i>Extract Requirements with AI');
                 }
-            },
-            error: function(xhr) {
-                $('#uploadErrorMessage').text('Server error: ' + (xhr.responseJSON?.error || 'Unknown error'));
-                $('#uploadError').show();
-                $('#uploadSuccess').hide();
-            },
-            complete: function() {
-                $('#uploadBtn').prop('disabled', false).html('<i class="fas fa-robot me-2"></i>Extract Requirements with AI');
-            }
+            });
         });
     });
-});
 </script>
 {% endblock %}

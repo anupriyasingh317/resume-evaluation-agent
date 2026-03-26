@@ -33,7 +33,7 @@ class ResumeEvaluationAgent:
         
         console.print("[green]Resume Evaluation Agent initialized![/green]")
     
-    def evaluate_resumes(self, requirements_file: Optional[str] = None) -> EvaluationReport:
+    def evaluate_resumes(self, requirements_file: Optional[str] = None, progress_callback=None) -> EvaluationReport:
         """Main evaluation pipeline."""
         
         # Load requirements
@@ -77,13 +77,18 @@ class ResumeEvaluationAgent:
             
             task = progress.add_task("Evaluating resumes...", total=len(resume_files))
             
-            for file_path in resume_files:
+            for idx, file_path in enumerate(resume_files):
                 try:
+                    if progress_callback:
+                        progress_callback(idx, len(resume_files), file_path.name)
+                    
                     # Extract text from resume
                     resume_text = self.resume_processor.extract_text(file_path)
                     if not resume_text:
                         console.print(f"[yellow]Warning: Could not extract text from {file_path.name}[/yellow]")
                         progress.advance(task)
+                        if progress_callback:
+                            progress_callback(idx + 1, len(resume_files), file_path.name)
                         continue
                     
                     # Evaluate with LLM
@@ -95,12 +100,19 @@ class ResumeEvaluationAgent:
                     
                     evaluations.append(evaluation)
                     progress.advance(task)
+                    if progress_callback:
+                        progress_callback(idx + 1, len(resume_files), file_path.name)
                     
                 except Exception as e:
                     console.print(f"[red]Error processing {file_path.name}: {e}[/red]")
                     logger.error(f"Error processing {file_path.name}: {e}")
                     progress.advance(task)
+                    if progress_callback:
+                        progress_callback(idx + 1, len(resume_files), file_path.name)
                     continue
+            
+            if progress_callback:
+                progress_callback(len(resume_files), len(resume_files), 'Done')
         
         if not evaluations:
             console.print("[red]No successful evaluations completed![/red]")
@@ -127,12 +139,12 @@ class ResumeEvaluationAgent:
         return report
     
     def run_evaluation(self, requirements_file: Optional[str] = None, 
-                      generate_reports: bool = True) -> EvaluationReport:
+                      generate_reports: bool = True, progress_callback=None) -> EvaluationReport:
         """Run complete evaluation pipeline with reporting."""
         
         try:
             # Run evaluation
-            report = self.evaluate_resumes(requirements_file)
+            report = self.evaluate_resumes(requirements_file, progress_callback=progress_callback)
             
             # Display console report
             self.report_generator.generate_console_report(report)

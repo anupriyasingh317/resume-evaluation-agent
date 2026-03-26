@@ -16,7 +16,7 @@ class ResumeSkills(BaseModel):
     soft_skills: List[str] = Field(default_factory=list)
     tools_technologies: List[str] = Field(default_factory=list)
     certifications: List[str] = Field(default_factory=list)
-    years_experience: Optional[Dict[str, int]] = Field(default_factory=dict)
+    years_experience: Optional[Dict[str, float]] = Field(default_factory=dict)
 
 class ResumeAnalysis(BaseModel):
     file_name: str

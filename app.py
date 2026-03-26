@@ -2,10 +2,24 @@ from flask import Flask, render_template, request, jsonify, session, send_file
 from werkzeug.utils import secure_filename
 import os
 import re
+import logging
+import threading
 from pathlib import Path
 from src.orchestrator import ResumeEvaluationAgent
 from src.models import Requirements
 import json
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'resume_evaluation_secret_key'
+app.config['UPLOAD_FOLDER'] = 'temp_uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+# Suppress Flask request logging for progress endpoint
+class ProgressFilter(logging.Filter):
+    def filter(self, record):
+        return '/api/progress' not in record.getMessage()
+
+logging.getLogger('werkzeug').addFilter(ProgressFilter())
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'resume_evaluation_secret_key'
@@ -18,10 +32,13 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Global variable to store current evaluation results
 evaluation_results = None
 
+# Progress tracking
+evaluation_progress = {'current': 0, 'total': 0, 'current_file': '', 'status': 'idle'}
+
 # Initialize agent
 agent = ResumeEvaluationAgent()
 
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'docx', 'doc'}
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'docx'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -29,7 +46,7 @@ def allowed_file(filename):
 @app.after_request
 def add_cache_busting_headers(response):
     """Add cache-busting headers to prevent caching of evaluation results."""
-    if request.endpoint.startswith('api/'):
+    if request.endpoint and request.endpoint.startswith('api/'):
         # Prevent caching for API endpoints
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
@@ -161,93 +178,51 @@ def evaluate_resumes():
         if not requirements_file:
             return jsonify({'success': False, 'error': 'No requirements file specified'})
         
-        # Run evaluation without auto-saving reports
-        report = agent.run_evaluation(requirements_file, generate_reports=False)
+        def progress_callback(current, total, filename):
+            evaluation_progress['current'] = current
+            evaluation_progress['total'] = total
+            evaluation_progress['current_file'] = filename
+            evaluation_progress['status'] = 'running'
         
-        # Convert report to JSON-serializable format using CSV logic
+        evaluation_progress['status'] = 'running'
+        evaluation_progress['current'] = 0
+        evaluation_progress['total'] = 0
+        evaluation_progress['current_file'] = ''
+        
+        # Run evaluation with progress callback
+        report = agent.run_evaluation(requirements_file, generate_reports=False, progress_callback=progress_callback)
+        
+        evaluation_progress['status'] = 'done'
+        
+        # Convert report to JSON-serializable format
         result = {
             'success': True,
             'summary': {
                 'total_candidates': report.total_resumes_evaluated,
                 'project_title': report.project_requirements.project_title,
-                'suitable': len([e for e in report.ranked_candidates if e.recommendation.startswith('Suitable')]),
-                'might_be_suitable': len([e for e in report.ranked_candidates if e.recommendation.startswith('Might be suitable')]),
-                'not_suitable': len([e for e in report.ranked_candidates if e.recommendation.startswith('Not suitable')])
+                'suitable': len([e for e in report.ranked_candidates if 'Suitable' in e.recommendation and 'Might' not in e.recommendation]),
+                'might_be_suitable': len([e for e in report.ranked_candidates if 'Might be suitable' in e.recommendation]),
+                'not_suitable': len([e for e in report.ranked_candidates if 'Not suitable' in e.recommendation])
             },
             'candidates': []
         }
         
         for i, evaluation in enumerate(report.ranked_candidates, 1):
-            reasoning_lines = evaluation.reasoning.split('\n')
-            overall_reasoning = reasoning_lines[0] if reasoning_lines else "No reasoning"
+            # Use raw reasoning for first line display if needed, but the UI generally uses evaluation.reasoning
+            overall_reasoning = evaluation.reasoning.split('\n')[0] if evaluation.reasoning else "No reasoning"
             
-            # Extract reasoning components like CSV does
-            skill_match_reasoning = ""
-            experience_reasoning = ""
-            project_relevance_reasoning = ""
-            concerns = ""
+            # Extract detailed reasoning components directly from evaluation.reasoning if they exist
+            # but since we want to move away from manual parsing, let's keep it simple
             
-            for line in reasoning_lines:
-                if "Skill Match:" in line:
-                    skill_match_reasoning = line.replace("Skill Match:", "").strip()
-                elif "Experience:" in line:
-                    experience_reasoning = line.replace("Experience:", "").strip()
-                elif "Project Relevance:" in line:
-                    project_relevance_reasoning = line.replace("Project Relevance:", "").strip()
-                elif "Concerns:" in line:
-                    concerns = line.replace("Concerns:", "").strip()
-            
-            # Fallback if no LLM experience reasoning found
-            if not experience_reasoning:
-                experience_years = evaluation.analysis.extracted_skills.years_experience.get('total', 0)
-                experience_reasoning = f"{experience_years} years experience"
-            
-            # Experience status - use LLM's YES/NO evaluation
-            experience_status = "YES"
-            if "NO" in experience_reasoning.upper() or "not within" in experience_reasoning.lower():
-                experience_status = "NO"
-            
-            # Add experience years info if available
-            experience_reasoning_text = experience_reasoning.lower()
-            cand_years = None
-            if re.search(r'(\d+)\s*years?', experience_reasoning_text):
-                cand_years = int(re.search(r'(\d+)\s*years?', experience_reasoning_text).group(1))
-                if cand_years:
-                    experience_status += f" ({cand_years} years)"
-            
-            # Project relevance status - use LLM's YES/NO evaluation
-            project_status = "YES"
-            if "NO" in project_relevance_reasoning.upper() or "limited" in project_relevance_reasoning.lower():
-                project_status = "NO"
-            
-            # Apply strict recommendation criteria
-            # Check if all conditions are met for "Suitable"
-            skill_score_high = evaluation.scores.skill_match_score >= 90
-            experience_good = "NO" not in experience_status.upper()
-            project_relevant = "NO" not in project_status.upper()
-            
-            if skill_score_high and experience_good and project_relevant and not evaluation.scores.missing_must_have:
-                recommendation = f"Suitable: {overall_reasoning}"
-            elif evaluation.scores.missing_must_have:
-                recommendation = f"Not suitable: Missing critical skills ({', '.join(evaluation.scores.missing_must_have)})"
-            else:
-                recommendation = f"Might be suitable: {overall_reasoning}"
-            
-            # Skill match status - NO if missing must-have skills
-            if evaluation.scores.missing_must_have:
-                skill_match_status = f"NO (Missing: {', '.join(evaluation.scores.missing_must_have)})"
-            else:
-                skill_match_status = "YES"
-            
-            # Determine if passed screening - must have all must-have skills
-            passed_screening = evaluation.scores.overall_score >= 60 and not evaluation.scores.missing_must_have
+            # Determine if passed screening based on overall score (simple threshold for UI)
+            passed_screening = evaluation.scores.overall_score >= 60
             
             candidate = {
                 'rank': i,
                 'file_name': evaluation.file_name,
                 'overall_score': evaluation.scores.overall_score,
-                'recommendation': recommendation,
-                'reasoning': overall_reasoning,
+                'recommendation': evaluation.recommendation,
+                'reasoning': evaluation.reasoning,
                 'skill_match_score': evaluation.scores.skill_match_score,
                 'experience_score': evaluation.scores.experience_score,
                 'project_relevance_score': evaluation.scores.project_relevance_score,
@@ -255,11 +230,11 @@ def evaluate_resumes():
                 'nice_to_have_covered': evaluation.scores.nice_to_have_covered,
                 'top_skills': evaluation.analysis.extracted_skills.technical_skills[:5],
                 'passed_screening': passed_screening,
-                # Add CSV-style detailed info
-                'skill_match': f"{skill_match_status}: {skill_match_reasoning}",
-                'experience': f"{experience_status}: {experience_reasoning}",
-                'project_relevance': f"{project_status}: {project_relevance_reasoning}",
-                'concerns': concerns[:100] + "..." if len(concerns) > 100 else concerns
+                # Simplified fields for UI compatibility
+                'skill_match': f"{'YES' if evaluation.scores.skill_match_score >= 80 else 'NO'} ({evaluation.scores.skill_match_score}%)",
+                'experience': f"{'YES' if evaluation.scores.experience_score >= 60 else 'NO'} ({evaluation.scores.experience_score}%)",
+                'project_relevance': f"{'YES' if evaluation.scores.project_relevance_score >= 60 else 'NO'} ({evaluation.scores.project_relevance_score}%)",
+                'concerns': ""
             }
             result['candidates'].append(candidate)
         
@@ -313,6 +288,45 @@ def check_requirements():
         except FileNotFoundError:
             return jsonify({'success': False, 'error': f'Requirements file not found: {requirements_file}'})
         
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/progress')
+def get_progress():
+    return jsonify(evaluation_progress)
+
+@app.route('/api/clear_resumes', methods=['POST'])
+def clear_resumes():
+    try:
+        resume_dir = Path(agent.resume_dir)
+        if resume_dir.exists():
+            for f in resume_dir.iterdir():
+                if f.is_file() and f.suffix.lower() in {'.pdf', '.docx', '.doc', '.txt'}:
+                    f.unlink()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/upload_resumes', methods=['POST'])
+def upload_resumes():
+    try:
+        if 'resumes' not in request.files:
+            return jsonify({'success': False, 'error': 'No files provided'})
+        
+        files = request.files.getlist('resumes')
+        resume_dir = Path(agent.resume_dir)
+        resume_dir.mkdir(parents=True, exist_ok=True)
+        
+        uploaded = 0
+        for file in files:
+            if file and file.filename:
+                filename = secure_filename(file.filename)
+                ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+                if ext in {'pdf', 'docx', 'txt'}:
+                    file.save(str(resume_dir / filename))
+                    uploaded += 1
+        
+        return jsonify({'success': True, 'uploaded': uploaded})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -374,4 +388,4 @@ def download_csv():
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)

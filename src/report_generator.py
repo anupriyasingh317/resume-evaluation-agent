@@ -29,9 +29,9 @@ class ReportGenerator:
         # Summary statistics
         summary = report.evaluation_summary
         console.print(Panel(
-            f"[green]Strong Matches: {summary['strong_matches']}[/green]\n"
-            f"[yellow]Partial Matches: {summary['partial_matches']}[/yellow]\n"
-            f"[red]No Matches: {summary['no_matches']}[/red]",
+            f"[green]Suitable: {summary.get('suitable', 0)}[/green]\n"
+            f"[yellow]Might be suitable: {summary.get('might_be_suitable', 0)}[/yellow]\n"
+            f"[red]Not suitable: {summary.get('not_suitable', 0)}[/red]",
             title="Summary Statistics"
         ))
         
@@ -48,11 +48,13 @@ class ReportGenerator:
                 key_skills = ", ".join(
                     [m.skill for m in candidate.skill_matches if m.found_in_resume][:3]
                 )
-                recommendation_style = {
-                    "Strong Match": "green",
-                    "Partial Match": "yellow", 
-                    "No Match": "red"
-                }.get(candidate.recommendation, "white")
+                recommendation_style = "white"
+                if "Suitable" in candidate.recommendation and "Might" not in candidate.recommendation:
+                    recommendation_style = "green"
+                elif "Might be suitable" in candidate.recommendation:
+                    recommendation_style = "yellow"
+                elif "Not suitable" in candidate.recommendation:
+                    recommendation_style = "red"
                 
                 table.add_row(
                     str(i),
@@ -151,115 +153,26 @@ class ReportGenerator:
         output_path = self.output_dir / filename
         
         rows = []
+        rows = []
         for evaluation in report.ranked_candidates:
-            # Extract key information from reasoning
-            reasoning_lines = evaluation.reasoning.split('\n')
-            overall_reasoning = reasoning_lines[0] if reasoning_lines else "No reasoning"
-            
-            # Find skill match details
-            skill_match_reasoning = ""
-            for line in reasoning_lines:
-                if "Skill Match:" in line:
-                    skill_match_reasoning = line.replace("Skill Match:", "").strip()
-                    break
-            
-            # Find experience details from LLM reasoning
-            experience_reasoning = ""
-            for line in reasoning_lines:
-                if "Experience:" in line:
-                    experience_reasoning = line.replace("Experience:", "").strip()
-                    break
-            
-            # Fallback if no LLM reasoning found
-            if not experience_reasoning:
-                experience_years = evaluation.analysis.extracted_skills.years_experience.get('total', 0)
-                experience_reasoning = f"{experience_years} years experience"
-            
-            # Find project relevance
-            project_relevance_reasoning = ""
-            for line in reasoning_lines:
-                if "Project Relevance:" in line:
-                    project_relevance_reasoning = line.replace("Project Relevance:", "").strip()
-                    break
-            
-            # Find concerns
-            concerns = ""
-            for line in reasoning_lines:
-                if "Concerns:" in line:
-                    concerns = line.replace("Concerns:", "").strip()
-                    break
-            
             # Top skills (first 5)
-            top_skills = ', '.join(evaluation.analysis.extracted_skills.technical_skills[:5])
+            top_skills = ', '.join([m.skill for m in evaluation.skill_matches if m.found_in_resume][:5])
             
-            # Experience status - use LLM's YES/NO evaluation
-            experience_status = "YES"
-            if "NO" in experience_reasoning.upper() or "not within" in experience_reasoning.lower():
-                experience_status = "NO"
-            
-            # Add experience years info if available
-            experience_reasoning_text = experience_reasoning.lower()
-            cand_years = None
-            if re.search(r'(\d+)\s*years?', experience_reasoning_text):
-                cand_years = int(re.search(r'(\d+)\s*years?', experience_reasoning_text).group(1))
-                if cand_years:
-                    experience_status += f" ({cand_years} years)"
-            
-            # Project relevance status - use LLM's YES/NO evaluation
-            project_status = "YES"
-            if "NO" in project_relevance_reasoning.upper() or "limited" in project_relevance_reasoning.lower():
-                project_status = "NO"
-            
-            # Determine recommendation based on strict criteria
-            # Check if all conditions are met for "Suitable"
-            skill_score_high = evaluation.scores.skill_match_score >= 90
-            experience_good = "NO" not in experience_status.upper()
-            project_relevant = "NO" not in project_status.upper()
-            
-            if skill_score_high and experience_good and project_relevant and not evaluation.scores.missing_must_have:
-                recommendation = f"Suitable: {overall_reasoning}"
-            elif evaluation.scores.missing_must_have:
-                recommendation = f"Not suitable: Missing critical skills ({', '.join(evaluation.scores.missing_must_have)})"
-            else:
-                recommendation = f"Might be suitable: {overall_reasoning}"
-            
-            # Skill match status - NO if missing must-have skills
-            if evaluation.scores.missing_must_have:
-                skill_match_status = f"NO (Missing: {', '.join(evaluation.scores.missing_must_have)})"
-            else:
-                skill_match_status = "YES"
-            
-            # Experience status - use LLM's YES/NO evaluation
-            experience_status = "YES"
-            if "NO" in experience_reasoning.upper() or "not within" in experience_reasoning.lower():
-                experience_status = "NO"
-            
-            # Add experience years info if available
-            experience_reasoning_text = experience_reasoning.lower()
-            cand_years = None
-            if re.search(r'(\d+)\s*years?', experience_reasoning_text):
-                cand_years = int(re.search(r'(\d+)\s*years?', experience_reasoning_text).group(1))
-                if cand_years:
-                    experience_status += f" ({cand_years} years)"
-            
-            # Project relevance status - use LLM's YES/NO evaluation
-            project_status = "YES"
-            if "NO" in project_relevance_reasoning.upper() or "limited" in project_relevance_reasoning.lower():
-                project_status = "NO"
-            
-            # Determine if passed screening - must have all must-have skills
-            passed_screening = "YES - Proceed to interview" if (evaluation.scores.overall_score >= 60 and not evaluation.scores.missing_must_have) else "NO - Not suitable"
-            
+            # Use AI recommendation and reasoning directly
+            recommendation = evaluation.recommendation
+            reasoning = evaluation.reasoning
+
+            # Simplify columns for evaluation
             row = {
                 'rank': evaluation.rank,
                 'file_name': evaluation.file_name,
                 'recommendation': recommendation,
-                'skill_match': f"{skill_match_status}: {skill_match_reasoning}",
-                'experience': f"{experience_status}: {experience_reasoning}",
-                'project_relevance': f"{project_status}: {project_relevance_reasoning}",
-                'concerns': concerns[:100] + "..." if len(concerns) > 100 else concerns,
+                'skill_match': f"{evaluation.scores.skill_match_score}/100",
+                'experience': f"{evaluation.scores.experience_score}/100",
+                'project_relevance': f"{evaluation.scores.project_relevance_score}/100",
+                'concerns': reasoning[:200] + "..." if len(reasoning) > 200 else reasoning,
                 'top_skills': top_skills,
-                'overall_evaluation': passed_screening
+                'overall_evaluation': f"{evaluation.scores.overall_score}/100"
             }
             rows.append(row)
         
@@ -300,9 +213,9 @@ class ReportGenerator:
             summary = report.evaluation_summary
             f.write(f"SUMMARY STATISTICS\n")
             f.write(f"{'-'*20}\n")
-            f.write(f"Strong Matches: {summary['strong_matches']}\n")
-            f.write(f"Partial Matches: {summary['partial_matches']}\n")
-            f.write(f"No Matches: {summary['no_matches']}\n\n")
+            f.write(f"Suitable: {summary.get('suitable', 0)}\n")
+            f.write(f"Might be suitable: {summary.get('might_be_suitable', 0)}\n")
+            f.write(f"Not suitable: {summary.get('not_suitable', 0)}\n\n")
             
             # Detailed candidate analysis
             f.write(f"CANDIDATE DETAILS\n")
