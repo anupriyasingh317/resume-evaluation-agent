@@ -375,12 +375,19 @@ def download_csv():
         # Convert to bytes and send as file
         csv_content = output.getvalue()
         output.close()
+
+        # Get project title and sanitize it for filename
+        project_title = evaluation_results.get('summary', {}).get('project_title', 'evaluation_results')
+        # Remove characters that aren't alphanumeric, space, or underscore
+        import re
+        safe_title = re.sub(r'[^\w\s-]', '', project_title).strip().replace(' ', '_')
+        filename = f"evaluation_results_{safe_title}.csv"
         
         from flask import Response
         response = Response(
             csv_content,
             mimetype='text/csv',
-            headers={'Content-Disposition': 'attachment; filename=evaluation_results.csv'}
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
         )
         return response
         
@@ -388,4 +395,6 @@ def download_csv():
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+    # Use Azure's provided port, or default to 5000 for local testing
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host='0.0.0.0', port=port, threaded=True)

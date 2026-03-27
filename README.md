@@ -1,29 +1,15 @@
 # Resume Evaluation Agent
 
-An intelligent LLM-powered resume screening and evaluation system with a modern web interface that analyzes candidate resumes against project requirements and provides ranked recommendations.
+An LLM-powered intelligent resume screening and evaluation system that analyzes candidate resumes against project requirements and provides ranked recommendations.
 
 ## Features
 
-### 🌐 Web Interface
-- **Modern UI**: Clean, responsive web interface for easy resume evaluation
-- **Manual Requirements**: Interactive form to create job requirements manually
-- **Job Description Upload**: AI-powered extraction from job descriptions
-- **Real-time Evaluation**: Live progress tracking and instant results
-- **Persistent Results**: Evaluation results persist across page reloads
-- **CSV Download**: Download evaluation results as CSV reports
-
-### 🤖 AI-Powered Analysis
 - **Multi-format Support**: Process PDF, DOCX, and TXT resume files
-- **LLM-Powered Analysis**: Advanced AI for skill extraction and semantic matching
-- **Intelligent Scoring**: Context-aware evaluation with strict scoring rules
-- **Cache-Busting**: Fresh LLM responses for accurate evaluations
+- **LLM-Powered Analysis**: Uses advanced AI for skill extraction and semantic matching
+- **Intelligent Scoring**: Weighted evaluation system with customizable criteria
+- **Comprehensive Reports**: Generate JSON, CSV, and detailed text reports
+- **Interactive Requirements**: Create and manage project requirements through CLI
 - **Skill Gap Analysis**: Identify coverage across all candidates
-
-### 📊 Smart Evaluation
-- **Experience Validation**: Checks if candidate experience matches required range (e.g., 3-7 years)
-- **Project Relevance**: Evaluates alignment of past projects with requirements
-- **Clear Recommendations**: Simple categories: "Suitable", "Might be suitable", "Not suitable"
-- **Color-Coded Results**: Visual indicators for quick pass/fail assessment
 
 ## Quick Start
 
@@ -37,8 +23,8 @@ pip install -r requirements.txt
 ### 2. Setup
 
 ```bash
-# Create required directories
-mkdir -p resumes config outputs/evaluations
+# Initialize the system
+python main.py setup
 ```
 
 ### 3. Configure LLM
@@ -57,146 +43,117 @@ Place your resume files in the `resumes/` directory:
 - Word documents (.docx)
 - Text files (.txt)
 
-### 5. Start the Web Application
+### 5. Create Requirements
 
 ```bash
-# Run the Flask web server
-python app.py
+# Create interactive requirements
+python main.py create-requirements
+
+# Or edit config/requirements.json manually
 ```
 
-### 6. Access the Application
+### 6. Evaluate Resumes
 
-Open your browser and navigate to:
-- **Home**: http://localhost:5000
-- **Manual Requirements**: http://localhost:5000/manual_requirements
-- **Upload Job Description**: http://localhost:5000/upload_job_description
-- **Evaluation**: http://localhost:5000/evaluate
+```bash
+# Evaluate all resumes
+python main.py evaluate
 
-## Web Interface Usage
+# Evaluate single resume
+python main.py single resume.pdf
 
-### Creating Requirements
+# Use custom requirements file
+python main.py evaluate --requirements custom_requirements.json
+```
 
-#### Option 1: Manual Requirements
-1. Navigate to **Manual Requirements** page
-2. Fill in project details:
-   - Project Title/Position
-   - Required Skills
-   - Must-Have Skills
-   - Nice-to-Have Skills
-   - Experience Level
-   - Project Type
-   - Job Description
-3. Click **"Save Requirements"**
-4. Click **"Go to Evaluation"** to proceed
+## CLI Commands
 
-#### Option 2: Upload Job Description
-1. Navigate to **Upload Job Description** page
-2. Upload a job description file (PDF, DOCX, TXT)
-3. AI automatically extracts requirements
-4. Click **"Go to Evaluation"** to proceed
+| Command | Description |
+|---------|-------------|
+| `setup` | Initialize directories and configuration |
+| `evaluate` | Evaluate all resumes in the directory |
+| `single <file>` | Evaluate a single resume file |
+| `create-requirements` | Create requirements interactively |
+| `show-requirements` | Display current requirements |
+| `list-resumes` | List available resume files |
+| `status` | Check system setup status |
 
-### Evaluating Candidates
+## Requirements Format
 
-1. **Load Requirements**: Requirements are automatically loaded
-2. **Check Resumes**: System shows available resume files
-3. **Start Evaluation**: Click **"Start Evaluation"** button
-4. **View Results**: See ranked candidates with detailed analysis
-5. **Download Report**: Export results as CSV
+The system uses JSON for project requirements:
 
-### Understanding Results
-
-#### Candidate Cards Display:
-- **Rank**: Candidate position (#1, #2, etc.)
-- **File Name**: Resume file name
-- **Skill Match**: YES/NO with missing skills highlighted
-- **Experience**: YES/NO with years of experience
-- **Project Relevance**: YES/NO with alignment assessment
-- **Recommendation**: Suitable/Might be suitable/Not suitable
-
-#### Color Coding:
-- 🟢 **Green**: YES/Pass status
-- 🔴 **Red**: NO/Fail status
-- 🟡 **Yellow**: Partial/Warning status
+```json
+{
+  "project_title": "Full Stack Developer",
+  "required_skills": ["Python", "SQL", "React", "AWS"],
+  "must_have_skills": ["Python", "SQL"],
+  "nice_to_have_skills": ["Docker", "Kubernetes"],
+  "experience_level": "3+ years",
+  "project_type": "Web application development",
+  "description": "Looking for full-stack developer"
+}
+```
 
 ## Evaluation Process
 
 1. **Resume Parsing**: Extract text from resume files
 2. **Skill Extraction**: LLM analyzes and extracts technical skills, experience, and projects
-3. **Skill Matching**: Semantic matching against requirements with strict scoring
-4. **Experience Validation**: Checks if experience falls within required range
-5. **Project Relevance**: Evaluates alignment of past projects
-6. **Recommendation**: Clear suitability categories
-7. **Ranking**: Candidates ranked by overall assessment
+3. **Skill Matching**: Semantic matching against requirements
+4. **Scoring**: Weighted scoring across multiple dimensions
+5. **Ranking**: Candidates ranked by overall score
+6. **Reporting**: Comprehensive evaluation reports
 
 ## Scoring System
 
-The evaluation uses intelligent assessment rather than numeric scores:
+The evaluation uses weighted scoring:
 
-### Skill Match Evaluation
-- **0 missing skills**: YES (95-100/100 equivalent)
-- **1 missing skill**: YES (90/100 equivalent)
-- **2 missing skills**: NO (80/100 equivalent)
-- **3-4 missing skills**: NO (70/100 equivalent)
-- **5+ missing skills**: NO (60/100 equivalent)
+- **Skill Match Score** (40%): How well skills match requirements
+- **Experience Score** (30%): Years and relevance of experience
+- **Project Relevance** (20%): Similarity of past projects
+- **Bonus Skills** (10%): Coverage of nice-to-have skills
 
-### Experience Evaluation
-- **Within required range**: YES
-- **Outside required range**: NO
-- **Examples**: 
-  - Required: "3-7 years" → 5 years = YES, 2 years = NO
-  - Required: "5+ years" → 6 years = YES, 4 years = NO
+## Report Outputs
 
-### Project Relevance
-- **Skill match > 85**: YES
-- **Skill match ≤ 85**: NO
+### Console Report
+- Rich, colored terminal output
+- Top candidates ranking
+- Skill coverage analysis
+- Summary statistics
 
-## Requirements Format
+### JSON Report
+- Detailed structured data
+- Complete evaluation results
+- Skill match details
+- API-ready format
 
-### Manual Requirements JSON Structure:
-```json
-{
-  "project_title": "Senior Python Developer",
-  "required_skills": ["Python", "Django", "PostgreSQL"],
-  "must_have_skills": ["Python", "Django", "API Design"],
-  "nice_to_have_skills": ["Docker", "Kubernetes", "AWS"],
-  "experience_level": "5+ years",
-  "project_type": "Web Application Development",
-  "description": "Looking for experienced Python developer for web applications"
-}
-```
+### CSV Report
+- Spreadsheet-friendly summary
+- Key metrics for each candidate
+- Easy data analysis
 
-### Experience Level Examples:
-- "3-7 years" - Range requirement
-- "5+ years" - Minimum requirement
-- "2-4 years" - Specific range
-- "Entry level" - No specific years required
+### Text Report
+- Human-readable detailed analysis
+- Individual candidate breakdowns
+- Skill gap analysis
 
 ## Project Structure
 
 ```
 resume_agent/
-├── resumes/                    # Resume files (PDF, DOCX, TXT)
+├── resumes/                 # Resume files (PDF, DOCX, TXT)
 ├── config/
-│   ├── requirements.json       # Default requirements
-│   ├── requirements_manual_*.json # Manual requirements
-│   └── requirements_from_*.json  # Job description requirements
+│   └── requirements.json    # Project requirements
 ├── src/
-│   ├── models.py              # Data models
-│   ├── resume_processor.py    # File parsing
-│   ├── llm_agent.py           # LLM interactions
+│   ├── models.py           # Data models
+│   ├── resume_processor.py # File parsing
+│   ├── llm_agent.py        # LLM interactions
 │   ├── requirements_manager.py # Requirements management
-│   ├── matcher.py             # Skill matching & scoring
-│   ├── report_generator.py    # Report generation
-│   └── orchestrator.py        # Main controller
-├── templates/
-│   ├── base.html              # Base template
-│   ├── index.html             # Home page
-│   ├── manual_requirements.html # Manual requirements form
-│   ├── upload_job_description.html # Job description upload
-│   └── evaluate.html         # Evaluation interface
-├── app.py                     # Flask web application
-├── requirements.txt           # Python dependencies
-└── README.md                 # This file
+│   ├── matcher.py          # Skill matching & scoring
+│   ├── report_generator.py # Report generation
+│   └── orchestrator.py     # Main controller
+├── outputs/evaluations/    # Generated reports
+├── main.py                 # CLI interface
+├── requirements.txt        # Python dependencies
+└── README.md              # This file
 ```
 
 ## Configuration
@@ -206,93 +163,55 @@ resume_agent/
 - `LITELLM_PROXY_API_KEY`: Your LLM API key
 - `LITELLM_URL`: LLM endpoint URL
 
-### Flask Configuration
+### Customization
 
-- `SECRET_KEY`: Session security key
-- `UPLOAD_FOLDER`: Temporary file upload location
-- `MAX_CONTENT_LENGTH`: Maximum file size (16MB)
+You can customize scoring weights in `src/matcher.py`:
 
-## API Endpoints
+```python
+self.score_weights = {
+    'skill_match': 0.4,
+    'experience': 0.3,
+    'project_relevance': 0.2,
+    'bonus_skills': 0.1
+}
+```
 
-### Requirements Management
-- `POST /api/process_manual_requirements` - Save manual requirements
-- `POST /api/upload_job_description` - Process job description
-- `GET /api/check_requirements` - Load current requirements
+## Example Usage
 
-### Evaluation
-- `POST /api/evaluate` - Run resume evaluation
-- `GET /api/list_resumes` - List available resumes
-- `GET /api/download_csv` - Download CSV report
+```bash
+# Quick evaluation with default settings
+python main.py evaluate
 
-## Advanced Features
+# Custom requirements and output
+python main.py evaluate --requirements senior_dev.json --output results/
 
-### Cache-Busting
-- Automatic cache-busting for fresh LLM responses
-- Unique request identifiers prevent stale results
-- Consistent evaluation logic with minimal randomness
+# Check system status
+python main.py status
 
-### Session Management
-- Requirements persist across page navigation
-- Evaluation results saved in sessionStorage
-- Direct URL navigation with requirements parameters
+# View available resumes
+python main.py list-resumes
 
-### Error Handling
-- Comprehensive error handling throughout the application
-- User-friendly error messages
-- Graceful fallbacks for missing files or data
+# Evaluate specific candidate
+python main.py single john_doe.pdf
+```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Requirements Not Loading**: 
-   - Check if requirements file exists in `config/` folder
-   - Verify manual requirements were saved successfully
-   - Look for "Requirements file not found" errors
-
-2. **Evaluation Not Starting**:
-   - Ensure resume files are in `resumes/` directory
-   - Check if requirements are loaded
-   - Verify LLM API configuration in `.env`
-
-3. **LLM Scoring Issues**:
-   - Check LLM API key and URL in `.env`
-   - Verify LLM endpoint is accessible
-   - Look for "LLM API call failed" errors
-
-4. **File Upload Problems**:
-   - Ensure file size is under 16MB
-   - Check file format (PDF, DOCX, TXT only)
-   - Verify files are not password-protected
+1. **LLM API Errors**: Check your `.env` configuration
+2. **Resume Parsing Failures**: Ensure files are not corrupted or password-protected
+3. **Missing Requirements**: Run `create-requirements` or check `config/requirements.json`
+4. **No Resume Files**: Add files to the `resumes/` directory
 
 ### Debug Mode
 
-Enable detailed logging by checking browser console and Flask server logs.
+Enable detailed logging:
 
-### File Locations
-
-- **Manual Requirements**: `config/requirements_manual_[timestamp].json`
-- **Job Description Requirements**: `config/requirements_from_[filename].json`
-- **Resume Files**: `resumes/` directory
-- **Temporary Uploads**: `temp_uploads/` directory
-
-## Example Workflow
-
-1. **Start Application**: `python app.py`
-2. **Create Requirements**: 
-   - Visit `/manual_requirements`
-   - Fill form with job details
-   - Click "Save Requirements"
-3. **Add Resumes**: Place PDF/DOCX files in `resumes/` folder
-4. **Evaluate**: 
-   - Visit `/evaluate`
-   - Click "Start Evaluation"
-   - Wait for AI analysis
-5. **Review Results**: 
-   - Check candidate rankings
-   - Review skill match details
-   - Download CSV report
-6. **Make Decisions**: Use recommendations to shortlist candidates
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
 
 ## License
 
@@ -302,6 +221,5 @@ This project is open source. See LICENSE file for details.
 
 For issues and questions:
 1. Check the troubleshooting section
-2. Review browser console for JavaScript errors
-3. Check Flask server logs for backend errors
-4. Verify file permissions and directory structure
+2. Run `python main.py status` to verify setup
+3. Review log outputs for error details

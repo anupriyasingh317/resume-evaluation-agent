@@ -25,7 +25,7 @@ class LLMAgent:
             base_url=self.base_url.replace('/chat/completions', '')
         )
     
-    def _call_llm(self, messages: List[Dict], model: str = "meta/llama-3.3-70b-instruct") -> str:
+    def _call_llm(self, messages: List[Dict], model: str = "standard") -> str:
         """Make a call to the LLM API with cache-busting for accuracy."""
         try:
             import time
