@@ -238,9 +238,16 @@ def evaluate_resumes():
             }
             result['candidates'].append(candidate)
         
-        # Store results globally for download functionality
+        # Store results globally and in a file for persistence across restarts
         global evaluation_results
         evaluation_results = result
+        
+        try:
+            os.makedirs('outputs/evaluations', exist_ok=True)
+            with open('outputs/evaluations/last_evaluation.json', 'w') as f:
+                json.dump(result, f)
+        except Exception as e:
+            print(f"Error saving last evaluation: {e}")
         
         return jsonify(result)
         
@@ -343,10 +350,18 @@ def list_resumes():
 
 @app.route('/api/download_csv')
 def download_csv():
+    global evaluation_results
     try:
+        # If global variable is None, try loading from the last saved file
+        if not evaluation_results:
+            last_eval_path = 'outputs/evaluations/last_evaluation.json'
+            if os.path.exists(last_eval_path):
+                with open(last_eval_path, 'r') as f:
+                    evaluation_results = json.load(f)
+        
         # Generate CSV directly from current evaluation results
         if not evaluation_results:
-            return jsonify({'success': False, 'error': 'No evaluation results available'})
+            return jsonify({'success': False, 'error': 'No evaluation results available. Please run an evaluation first.'})
         
         # Create CSV content from current results
         import io
@@ -394,7 +409,184 @@ def download_csv():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/download_pdf')
+def download_pdf():
+    global evaluation_results
+    try:
+        # If global variable is None, try loading from the last saved file
+        if not evaluation_results:
+            last_eval_path = 'outputs/evaluations/last_evaluation.json'
+            if os.path.exists(last_eval_path):
+                with open(last_eval_path, 'r') as f:
+                    evaluation_results = json.load(f)
+
+        if not evaluation_results:
+            return jsonify({'success': False, 'error': 'No evaluation results available. Please run an evaluation first.'})
+        
+        from fpdf import FPDF
+        import io
+        
+        def clean_text(text):
+            """Replace common unicode characters with ASCII equivalents."""
+            if not text: return ""
+            # Map of Unicode characters to ASCII equivalents
+            replacements = {
+                '\u2013': '-',  # en dash
+                '\u2014': '--', # em dash
+                '\u2018': "'",  # left single quote
+                '\u2019': "'",  # right single quote
+                '\u201c': '"',  # left double quote
+                '\u201d': '"',  # right double quote
+                '\u2022': '*',  # bullet point
+                '\u2026': '...',# ellipsis
+                '\u2122': '(TM)',# TM symbol
+                '\xa0': ' ',    # non-breaking space
+            }
+            for char, rep in replacements.items():
+                text = text.replace(char, rep)
+            
+            # Remove any other non-ASCII characters to prevent PDF crashes
+            return text.encode('ascii', 'ignore').decode('ascii')
+
+        class PDF(FPDF):
+            def header(self):
+                self.set_font('helvetica', 'B', 15)
+                self.cell(0, 10, 'Resume Evaluation Report', 0, 1, 'C')
+                self.ln(5)
+            
+            def footer(self):
+                self.set_y(-15)
+                self.set_font('helvetica', 'I', 8)
+                self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+
+        pdf = PDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+        
+        # Project Info
+        summary = evaluation_results.get('summary', {})
+        project_title = clean_text(summary.get('project_title', 'evaluation_results'))
+        
+        pdf.set_font('helvetica', 'B', 12)
+        pdf.cell(0, 10, clean_text(f"Project: {project_title}"), 0, 1)
+        pdf.set_font('helvetica', '', 10)
+        pdf.cell(0, 10, f"Date: {re.sub(r'[^0-9-]', '', str(Path('config').stat().st_mtime))[:10] if Path('config').exists() else 'N/A'}", 0, 1)
+        pdf.ln(5)
+        
+        # Summary Stats (Compact)
+        pdf.set_font('helvetica', 'B', 11)
+        pdf.cell(0, 10, 'Evaluation Summary', 0, 1)
+        pdf.set_font('helvetica', '', 10)
+        
+        # Grid layout for stats
+        col_width = 45
+        pdf.cell(col_width, 8, f"Total: {summary.get('total_candidates', 0)}", 0)
+        pdf.cell(col_width, 8, f"Suitable: {summary.get('suitable', 0)}", 0)
+        pdf.cell(col_width + 10, 8, f"Waitlist: {summary.get('might_be_suitable', 0)}", 0)
+        pdf.cell(col_width, 8, f"Not Suitable: {summary.get('not_suitable', 0)}", 0)
+        pdf.ln(12)
+        
+        # Compact Rankings Table
+        pdf.set_font('helvetica', 'B', 10)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(15, 8, 'Rank', 1, 0, 'C', True)
+        pdf.cell(95, 8, 'Candidate Name', 1, 0, 'L', True)
+        pdf.cell(20, 8, 'Score', 1, 0, 'C', True)
+        pdf.cell(60, 8, 'Status', 1, 0, 'C', True)
+        pdf.ln()
+        
+        pdf.set_font('helvetica', '', 9)
+        for candidate in evaluation_results.get('candidates', []):
+            # Simplify status
+            raw_rec = candidate['recommendation']
+            if 'Suitable' in raw_rec and 'Might' not in raw_rec:
+                status = 'Suitable'
+            elif 'Might' in raw_rec:
+                status = 'Possible Match'
+            else:
+                status = 'Not Suitable'
+                
+            pdf.cell(15, 7, str(candidate['rank']), 1, 0, 'C')
+            pdf.cell(95, 7, clean_text(str(candidate['file_name'])[:50]), 1)
+            pdf.cell(20, 7, f"{candidate['overall_score']}%", 1, 0, 'C')
+            pdf.cell(60, 7, status, 1, 0, 'C')
+            pdf.ln()
+            
+        # --- NEW: Detailed Candidate Reports ---
+        pdf.add_page()
+        pdf.set_font('helvetica', 'B', 14)
+        pdf.cell(0, 10, 'Detailed Candidate Evaluations', 0, 1, 'L')
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(5)
+
+        for candidate in evaluation_results.get('candidates', []):
+            # Candidate Header
+            pdf.set_font('helvetica', 'B', 12)
+            pdf.set_fill_color(230, 230, 250) # Light lavender
+            pdf.cell(0, 10, f" #{candidate['rank']} - {clean_text(candidate['file_name'])}", 0, 1, 'L', True)
+            
+            # Scores & Match Summary
+            pdf.set_font('helvetica', 'B', 10)
+            pdf.cell(40, 8, f"Overall Score: {candidate['overall_score']}%", 0, 0)
+            pdf.set_font('helvetica', '', 9)
+            pdf.cell(50, 8, f"Skill Match: {clean_text(candidate['skill_match'])}", 0, 0)
+            pdf.cell(50, 8, f"Experience: {clean_text(candidate['experience'])}", 0, 0)
+            pdf.cell(50, 8, f"Project Relevance: {clean_text(candidate['project_relevance'])}", 0, 1)
+            
+            # Reasoning
+            pdf.set_font('helvetica', 'B', 10)
+            pdf.cell(0, 8, "Evaluation Reasoning:", 0, 1)
+            pdf.set_font('helvetica', '', 9)
+            pdf.multi_cell(0, 5, clean_text(candidate['reasoning']))
+            pdf.ln(2)
+            
+            # Matching Skills & Lacking Areas
+            # We'll use two columns if they fit, or just stacked
+            
+            # Matching Skills
+            pdf.set_font('helvetica', 'B', 9)
+            pdf.set_text_color(0, 100, 0) # Dark Green
+            pdf.cell(0, 7, "Matching Skills / Strengths:", 0, 1)
+            pdf.set_font('helvetica', '', 9)
+            pdf.set_text_color(0, 0, 0)
+            skills = ", ".join(candidate.get('top_skills', [])) or "None identified"
+            pdf.multi_cell(0, 5, clean_text(skills))
+            pdf.ln(1)
+            
+            # Lacking Areas
+            pdf.set_font('helvetica', 'B', 9)
+            pdf.set_text_color(150, 0, 0) # Dark Red
+            pdf.cell(0, 7, "Lacking Areas / Missing Requirements:", 0, 1)
+            pdf.set_font('helvetica', '', 9)
+            pdf.set_text_color(0, 0, 0)
+            lacking = ", ".join(candidate.get('missing_must_have', [])) or "None identified"
+            pdf.multi_cell(0, 5, clean_text(lacking))
+            
+            pdf.ln(5)
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+            pdf.ln(5)
+            
+            # Add a page break if nearing the end of the page
+            if pdf.get_y() > 250:
+                pdf.add_page()
+            
+        # PDF Output
+        safe_title = re.sub(r'[^\w\s-]', '', project_title).strip().replace(' ', '_')
+        filename = f"evaluation_report_{safe_title}.pdf"
+        
+        # Use BytesIO to provide a file-like object for send_file
+        pdf_bytes = pdf.output()
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
-    # Use Azure's provided port, or default to 5000 for local testing
-    port = int(os.environ.get("PORT", 5000))
+    # Use Azure's provided port, or default to 5001 for local testing
+    port = int(os.environ.get("PORT", 5001))
     app.run(debug=True, host='0.0.0.0', port=port, threaded=True)

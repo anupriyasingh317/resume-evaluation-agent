@@ -1,225 +1,123 @@
-# Resume Evaluation Agent
+# 🤖 Resume Evaluation Agent
 
-An LLM-powered intelligent resume screening and evaluation system that analyzes candidate resumes against project requirements and provides ranked recommendations.
+An AI-powered intelligent resume screening and evaluation system. It leverages Large Language Models (LLMs) to analyze candidate resumes against specific project requirements, providing ranked recommendations with detailed reasoning.
 
-## Features
+Now featuring a **Modern Web Interface** for easier interaction and management!
 
-- **Multi-format Support**: Process PDF, DOCX, and TXT resume files
-- **LLM-Powered Analysis**: Uses advanced AI for skill extraction and semantic matching
-- **Intelligent Scoring**: Weighted evaluation system with customizable criteria
-- **Comprehensive Reports**: Generate JSON, CSV, and detailed text reports
-- **Interactive Requirements**: Create and manage project requirements through CLI
-- **Skill Gap Analysis**: Identify coverage across all candidates
+---
 
-## Quick Start
+## 🌟 Key Features
+
+### 🖥️ Web Interface
+- **Interactive Requirements**: Create project requirements via an intuitive form or upload existing ones.
+- **JD Parsing**: Upload a Job Description (PDF/DOCX/TXT) and let AI automatically extract the core requirements.
+- **Resume Management**: Effortlessly upload and manage resume files through the UI.
+- **Real-time Evaluation**: Watch the evaluation progress in real-time with visual status updates.
+- **Comprehensive Rankings**: View candidates ranked by quality with detailed score breakdowns.
+- **Detailed Insights**: Access AI-generated reasoning, skill gap analysis, and interview recommendations for every candidate.
+- **Export Reports**: One-click downloads for professional PDF and CSV evaluation reports.
+
+### ⚙️ Core Engine & CLI
+- **Multi-format Support**: Native processing for PDF, DOCX, and TXT resume files.
+- **LLM-Powered Analysis**: Uses LiteLLM for advanced skill extraction and semantic matching.
+- **Intelligent Scoring**: Multi-dimensional weighted evaluation system:
+    - **Skill Match** (40%)
+    - **Experience Relevance** (30%)
+    - **Project Alignment** (20%)
+    - **Bonus Skills** (10%)
+- **Robust CLI**: Comprehensive command-line interface for automation and advanced configuration.
+
+---
+
+## 🚀 Quick Start
 
 ### 1. Installation
 
 ```bash
+# Clone the repository and navigate to it
+cd resume-evaluation-agent
+
 # Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Setup
+### 2. Configuration
 
-```bash
-# Initialize the system
-python main.py setup
-```
-
-### 3. Configure LLM
-
-Update the `.env` file with your LLM configuration:
+Update the `.env` file with your LLM provider details (using LiteLLM):
 
 ```env
 LITELLM_PROXY_API_KEY="your-api-key"
 LITELLM_URL="https://your-llm-endpoint/chat/completions"
 ```
 
-### 4. Add Resume Files
+### 3. Launch the Web UI (Recommended)
 
-Place your resume files in the `resumes/` directory:
-- PDF files (.pdf)
-- Word documents (.docx)
-- Text files (.txt)
-
-### 5. Create Requirements
+Start the Flask application:
 
 ```bash
-# Create interactive requirements
-python main.py create-requirements
-
-# Or edit config/requirements.json manually
+python app.py
 ```
+Open your browser and navigate to `http://localhost:5001`.
 
-### 6. Evaluate Resumes
+---
 
-```bash
-# Evaluate all resumes
-python main.py evaluate
+## 🛠️ CLI Usage
 
-# Evaluate single resume
-python main.py single resume.pdf
+For power users, the CLI offers granular control over the evaluation process.
 
-# Use custom requirements file
-python main.py evaluate --requirements custom_requirements.json
-```
+### Basic Commands
 
-## CLI Commands
+| Command | Action |
+|---------|--------|
+| `python main.py setup` | Initialize directories and local configuration. |
+| `python main.py evaluate` | Evaluate all resumes in the `resumes/` folder. |
+| `python main.py single <file>` | Analyze a specific resume file. |
+| `python main.py create-requirements` | Interactive tool to build requirement JSONs. |
+| `python main.py status` | Verify your environment and LLM connection. |
 
-| Command | Description |
-|---------|-------------|
-| `setup` | Initialize directories and configuration |
-| `evaluate` | Evaluate all resumes in the directory |
-| `single <file>` | Evaluate a single resume file |
-| `create-requirements` | Create requirements interactively |
-| `show-requirements` | Display current requirements |
-| `list-resumes` | List available resume files |
-| `status` | Check system setup status |
+---
 
-## Requirements Format
+## 🏗️ Project Structure
 
-The system uses JSON for project requirements:
-
-```json
-{
-  "project_title": "Full Stack Developer",
-  "required_skills": ["Python", "SQL", "React", "AWS"],
-  "must_have_skills": ["Python", "SQL"],
-  "nice_to_have_skills": ["Docker", "Kubernetes"],
-  "experience_level": "3+ years",
-  "project_type": "Web application development",
-  "description": "Looking for full-stack developer"
-}
-```
-
-## Evaluation Process
-
-1. **Resume Parsing**: Extract text from resume files
-2. **Skill Extraction**: LLM analyzes and extracts technical skills, experience, and projects
-3. **Skill Matching**: Semantic matching against requirements
-4. **Scoring**: Weighted scoring across multiple dimensions
-5. **Ranking**: Candidates ranked by overall score
-6. **Reporting**: Comprehensive evaluation reports
-
-## Scoring System
-
-The evaluation uses weighted scoring:
-
-- **Skill Match Score** (40%): How well skills match requirements
-- **Experience Score** (30%): Years and relevance of experience
-- **Project Relevance** (20%): Similarity of past projects
-- **Bonus Skills** (10%): Coverage of nice-to-have skills
-
-## Report Outputs
-
-### Console Report
-- Rich, colored terminal output
-- Top candidates ranking
-- Skill coverage analysis
-- Summary statistics
-
-### JSON Report
-- Detailed structured data
-- Complete evaluation results
-- Skill match details
-- API-ready format
-
-### CSV Report
-- Spreadsheet-friendly summary
-- Key metrics for each candidate
-- Easy data analysis
-
-### Text Report
-- Human-readable detailed analysis
-- Individual candidate breakdowns
-- Skill gap analysis
-
-## Project Structure
-
-```
+```text
 resume_agent/
-├── resumes/                 # Resume files (PDF, DOCX, TXT)
-├── config/
-│   └── requirements.json    # Project requirements
-├── src/
-│   ├── models.py           # Data models
-│   ├── resume_processor.py # File parsing
-│   ├── llm_agent.py        # LLM interactions
-│   ├── requirements_manager.py # Requirements management
-│   ├── matcher.py          # Skill matching & scoring
-│   ├── report_generator.py # Report generation
-│   └── orchestrator.py     # Main controller
-├── outputs/evaluations/    # Generated reports
-├── main.py                 # CLI interface
-├── requirements.txt        # Python dependencies
-└── README.md              # This file
+├── app.py                  # Flask Web Application entry point
+├── main.py                 # CLI Tool entry point
+├── src/                    # Core Logic
+│   ├── orchestrator.py     # Main system controller
+│   ├── llm_agent.py        # AI Analysis engine
+│   ├── resume_processor.py # Multi-format file parsing
+│   ├── matcher.py          # Scoring and ranking logic
+│   └── report_generator.py # PDF/CSV/Text report generation
+├── templates/              # Web UI HTML templates
+├── config/                 # Requirements and settings
+├── resumes/                # Default directory for resume files
+├── outputs/                # Generated reports and logs
+└── requirements.txt        # Project dependencies
 ```
 
-## Configuration
+---
 
-### Environment Variables
+## 📊 Evaluation Logic
 
-- `LITELLM_PROXY_API_KEY`: Your LLM API key
-- `LITELLM_URL`: LLM endpoint URL
+The agent doesn't just look for keywords; it performs a **semantic analysis**:
 
-### Customization
+1.  **Parsing**: Extracts text and structure from various file formats.
+2.  **Extraction**: AI identifies technical skills, soft skills, years of experience, and project domains.
+3.  **Matching**: Compares extracted data against "Must-have" and "Nice-to-have" requirements.
+4.  **Scoring**: Calculates a weighted score based on match depth and relevance.
+5.  **Reasoning**: Generates human-readable feedback on why a candidate is (or isn't) a fit.
 
-You can customize scoring weights in `src/matcher.py`:
+---
 
-```python
-self.score_weights = {
-    'skill_match': 0.4,
-    'experience': 0.3,
-    'project_relevance': 0.2,
-    'bonus_skills': 0.1
-}
-```
+## 📝 Troubleshooting
 
-## Example Usage
+- **LLM Connection**: Ensure your `LITELLM_PROXY_API_KEY` is valid and you have network access to the endpoint.
+- **File Parsing**: Scanned PDFs (images) might require OCR; the current system excels with text-based documents.
+- **Port Conflict**: If port `5001` is busy, change it in `app.py` or use the `PORT` environment variable.
 
-```bash
-# Quick evaluation with default settings
-python main.py evaluate
+---
 
-# Custom requirements and output
-python main.py evaluate --requirements senior_dev.json --output results/
+## ⚖️ License
 
-# Check system status
-python main.py status
-
-# View available resumes
-python main.py list-resumes
-
-# Evaluate specific candidate
-python main.py single john_doe.pdf
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **LLM API Errors**: Check your `.env` configuration
-2. **Resume Parsing Failures**: Ensure files are not corrupted or password-protected
-3. **Missing Requirements**: Run `create-requirements` or check `config/requirements.json`
-4. **No Resume Files**: Add files to the `resumes/` directory
-
-### Debug Mode
-
-Enable detailed logging:
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-```
-
-## License
-
-This project is open source. See LICENSE file for details.
-
-## Support
-
-For issues and questions:
-1. Check the troubleshooting section
-2. Run `python main.py status` to verify setup
-3. Review log outputs for error details
+This project is licensed under the MIT License - see the LICENSE file for details.

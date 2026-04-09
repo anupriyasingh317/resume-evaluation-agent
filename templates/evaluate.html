@@ -106,14 +106,17 @@
                             </div>
                         </div>
 
-                        <div class="btn-group" role="group">
-                            <button id="downloadCsvBtn" class="btn btn-success" disabled>
-                                <i class="fas fa-download me-2"></i>Download CSV Report
-                            </button>
-                            <button id="clearResultsBtn" class="btn btn-outline-secondary" disabled>
-                                <i class="fas fa-trash me-2"></i>Clear Results
-                            </button>
-                        </div>
+                            <div class="btn-group" role="group">
+                                <button id="downloadCsvBtn" class="btn btn-success" disabled title="Download comprehensive CSV report">
+                                    <i class="fas fa-file-csv me-2"></i>Download CSV
+                                </button>
+                                <button id="downloadPdfBtn" class="btn btn-danger" disabled title="Download formatted PDF report">
+                                    <i class="fas fa-file-pdf me-2"></i>Download PDF
+                                </button>
+                                <button id="clearResultsBtn" class="btn btn-outline-secondary" disabled>
+                                    <i class="fas fa-trash me-2"></i>Clear Results
+                                </button>
+                            </div>
                     </div>
                 </div>
             </div>
@@ -425,7 +428,7 @@
         sessionStorage.setItem('evaluationResults', JSON.stringify(results));
 
         // Enable action buttons
-        $('#downloadCsvBtn, #viewDetailsBtn, #clearResultsBtn').prop('disabled', false);
+        $('#downloadCsvBtn, #downloadPdfBtn, #clearResultsBtn').prop('disabled', false);
 
         // Update summary
         $('#suitable').text(summary.suitable);
@@ -516,7 +519,7 @@
             $('#totalCandidates').text('0');
 
             // Hide buttons that require results
-            $('#downloadCsvBtn, #clearResultsBtn').prop('disabled', true);
+            $('#downloadCsvBtn, #downloadPdfBtn, #clearResultsBtn').prop('disabled', true);
 
             console.log('Evaluation results cleared');
         }
@@ -526,6 +529,13 @@
         if (evaluationResults) {
             // Download the actual CSV file generated during evaluation
             window.location.href = '/api/download_csv';
+        }
+    });
+
+    $('#downloadPdfBtn').on('click', function () {
+        if (evaluationResults) {
+            // Download the PDF report
+            window.location.href = '/api/download_pdf';
         }
     });
 </script>
